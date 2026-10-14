@@ -1,0 +1,25 @@
+{
+  "name": "hyperdrain",
+  "repo": "darkangle4022211-cpu/hyperdrain",
+  "version": "1.0.3",
+  "tag": "v1.0.3",
+  "changelog": "• Sidebar Ergonomics: Settings tab repositioned directly above the speed telemetry card for clean navigation\n• Streamlined Settings: Hidden internal auth token field to keep interface clean and focused\n• Multi-Platform Auto-Updater: Enhanced dual-OS release pipeline for Linux .deb and Windows .exe\n• Resilient GitHub Release Tracking: Rate-limit-immune update detection for instant online updates\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
+  "support": {
+    "message": "If you're facing a problem, feel free to contact the developer:",
+    "email": "hamza.zafar4022211@gmail.com"
+  },
+  "platforms": {
+    "linux-deb-x64": {
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.3/hyperdrain_1.0.3_amd64.deb",
+      "sha256": "",
+      "size": 162113582,
+      "filename": "hyperdrain_1.0.3_amd64.deb"
+    },
+    "windows-x64": {
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.3/HyperDrain-Setup-1.0.3.exe",
+      "sha256": "",
+      "size": 0,
+      "filename": "HyperDrain-Setup-1.0.3.exe"
+    }
+  }
+}

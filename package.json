@@ -1,0 +1,62 @@
+{
+  "name": "hyperdrain",
+  "productName": "HyperDrain",
+  "version": "1.0.3",
+  "description": "32GB High-Speed Resilient Downloader with Universal Extension",
+  "main": "electron/main.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron --no-sandbox .",
+    "build:engine": "bash scripts/build_engine.sh",
+    "build:release": "bash scripts/build_release.sh",
+    "dist:linux": "electron-builder --linux deb",
+    "dist:win": "electron-builder --win portable"
+  },
+  "keywords": [
+    "downloader",
+    "high-speed",
+    "video-downloader",
+    "hls",
+    "m3u8",
+    "web-series",
+    "fallocate",
+    "electron"
+  ],
+  "author": "HyperDrain",
+  "license": "MIT",
+  "build": {
+    "appId": "com.hyperdrain.downloader",
+    "productName": "HyperDrain",
+    "asar": false,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "assets/**/*",
+      "electron/**/*",
+      "extension/**/*",
+      "webui/**/*",
+      "hyperdrain-engine",
+      "hyperdrain",
+      "hyperdrain.exe",
+      "update.json",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "category": "Network;FileTransfer;",
+      "icon": "assets/hyperdrain.png",
+      "maintainer": "HyperDrain <support@hyperdrain.local>",
+      "synopsis": "32GB High-Speed Resilient Downloader with Universal Extension",
+      "description": "Accelerated multi-threaded downloader tailored for massive files, web series, and video streams."
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "assets/hyperdrain.png"
+    }
+  }
+}
