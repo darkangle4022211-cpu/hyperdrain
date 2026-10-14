@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "HyperDrain - 32GB High-Speed Downloader",
+  "version": "1.0.3",
+  "description": "Multi-threaded high-speed downloader for large media, web series archives, and movies with zero web hosting.",
+  "permissions": [
+    "downloads",
+    "contextMenus",
+    "cookies",
+    "storage",
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "notifications"
+  ],
+  "incognito": "split",
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HyperDrain Downloader"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

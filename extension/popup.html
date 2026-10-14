@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HyperDrain</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="glass-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <span class="bolt">⚡</span>
+        <h1 class="logo">HyperDrain</h1>
+      </div>
+      <div id="status-pill" class="status-pill offline">
+        <span class="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Floating Video Bar ON/OFF Switch -->
+    <div class="toggle-card">
+      <div class="toggle-info">
+        <span class="toggle-icon">🎬</span>
+        <div class="toggle-text">
+          <span class="toggle-title">Show Download Bar on Videos</span>
+          <span class="toggle-desc">Turn on/off floating button over videos</span>
+        </div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-floating-btn" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Speed Meter Card -->
+    <div class="metrics-card">
+      <div class="metric-item">
+        <span class="metric-label">DOWNLOAD SPEED</span>
+        <span id="speed-val" class="metric-value">0.0 <small>MB/s</small></span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <span class="metric-label">ACTIVE / TOTAL</span>
+        <span id="tasks-val" class="metric-value">0 <small>/ 0</small></span>
+      </div>
+    </div>
+
+    <!-- Quick Add Input -->
+    <div class="quick-add">
+      <input type="text" id="url-input" placeholder="Paste direct URL or magnet link..." />
+      <button id="add-btn" title="Add Download">⚡</button>
+    </div>
+
+    <!-- Sniffed Media Streams on Active Tab -->
+    <div id="sniffed-section" style="display: none; margin-bottom: 12px;">
+      <div class="section-title">Detected Video on this Page</div>
+      <div id="sniffed-list" class="tasks-list"></div>
+    </div>
+
+    <!-- Active Tasks Mini-List -->
+    <div class="section-title">Active Downloads</div>
+    <div id="tasks-list" class="tasks-list">
+      <div class="empty-state">No downloads in progress</div>
+    </div>
+
+    <!-- Footer Action -->
+    <footer class="footer">
+      <button id="open-dashboard-btn" class="dashboard-btn">
+        <span>Launch Desktop Dashboard</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </button>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HyperDrain — High-Speed Downloader</title>
+  <link rel="stylesheet" href="app.css?v=4.0">
+</head>
+<body>
+  <!-- Native Desktop Titlebar -->
+  <header id="desktop-titlebar" class="desktop-titlebar">
+    <div class="titlebar-drag-region">
+      <div class="titlebar-brand">
+        <span class="titlebar-title">HyperDrain</span>
+        <span class="titlebar-version">v1.0.3</span>
+        <span class="titlebar-status-dot" title="Core Engine Active"></span>
+        <span class="titlebar-engine-status" id="titlebar-engine-status">Connected</span>
+      </div>
+    </div>
+    <div class="titlebar-center">
+      <span id="titlebar-live-speed" class="titlebar-speed">0.00 MB/s</span>
+    </div>
+    <div class="titlebar-controls" id="titlebar-controls">
+      <button id="btn-win-min" class="win-btn" title="Minimize" aria-label="Minimize">
+        <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+      </button>
+      <button id="btn-win-max" class="win-btn" title="Maximize" aria-label="Maximize">
+        <svg width="10" height="10" viewBox="0 0 10 10"><rect width="9" height="9" x="0.5" y="0.5" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
+      <button id="btn-win-close" class="win-btn win-close" title="Close" aria-label="Close">
+        <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">HyperDrain</span>
+          <span class="brand-tag">High-Speed Downloader</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          </svg>
+          <span>Active Downloads</span>
+          <span id="badge-active" class="badge">0</span>
+        </button>
+
+        <button class="nav-item" data-tab="completed">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <span>Completed</span>
+          <span id="badge-completed" class="badge muted">0</span>
+        </button>
+
+        <button class="nav-item" data-tab="extension">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+          <span>Extension Hub</span>
+          <span class="badge muted">MV3</span>
+        </button>
+
+        <button class="nav-item" data-tab="analytics">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          <span>Diagnostics</span>
+        </button>
+      </nav>
+
+      <!-- Bottom Telemetry & Quick Action Controls -->
+      <div class="sidebar-bottom-controls">
+        <button class="nav-item sidebar-settings-item" data-tab="settings" title="Engine Settings & Updates">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Settings</span>
+        </button>
+
+        <div class="sidebar-stats-card">
+          <!-- 5. Speed -->
+          <div class="sidebar-stat-row" title="Current Internet Download Speed">
+            <div class="sidebar-stat-label-wrap">
+              <span class="stat-indicator-dot dot-speed"></span>
+              <span class="sidebar-stat-label">Speed</span>
+            </div>
+            <span class="sidebar-stat-val" id="total-speed">0.00 MB/s</span>
+          </div>
+
+          <!-- 4. Disk Write -->
+          <div class="sidebar-stat-row" title="Local Disk Write Speed">
+            <div class="sidebar-stat-label-wrap">
+              <span class="stat-indicator-dot dot-disk"></span>
+              <span class="sidebar-stat-label">Disk Write</span>
+            </div>
+            <span class="sidebar-stat-val" id="disk-speed">0.00 MB/s</span>
+          </div>
+
+          <!-- 3. Streams -->
+          <div class="sidebar-stat-row" title="Active Parallel Streams">
+            <div class="sidebar-stat-label-wrap">
+              <span class="stat-indicator-dot dot-streams"></span>
+              <span class="sidebar-stat-label">Streams</span>
+            </div>
+            <span class="sidebar-stat-val" id="total-conns">0</span>
+          </div>
+        </div>
+
+        <!-- 2. Add Downloads at the very bottom -->
+        <button id="open-add-modal" class="btn-primary sidebar-add-btn" title="Add new download URL">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Add Download</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-title-section">
+          <h2 id="view-title">Active Downloads</h2>
+          <p class="subtitle">Multi-threaded accelerated parallel downloader</p>
+        </div>
+
+        <div class="topbar-stats">
+          <!-- Online Update Available Badge (Hidden by default; only shown when update is available) -->
+          <button id="btn-update-available" class="btn-update-pill" style="display: none;" title="A new update is available! Click to inspect and install.">
+            <span class="update-pulse-dot"></span>
+            <span id="btn-update-text">Update Available</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Tab 1: Active Downloads View -->
+      <section id="view-active" class="content-view active">
+        <!-- Live Mini Speed Chart -->
+        <div class="card speed-chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <span class="dot-indicator"></span>
+              <span>Network Throughput (60s Real-Time)</span>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-color cyan"></span> Download Speed</span>
+              <span class="legend-item"><span class="legend-color emerald"></span> Disk Write</span>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="liveChart" height="70"></canvas>
+          </div>
+        </div>
+
+        <!-- Task List Container -->
+        <div id="active-tasks-container" class="tasks-container">
+          <!-- Dynamic Task Cards will be injected here -->
+        </div>
+      </section>
+
+      <!-- Tab 2: Completed Downloads View -->
+      <section id="view-completed" class="content-view">
+        <div class="card">
+          <div class="card-header">
+            <h3>Completed Downloads</h3>
+            <button id="clear-completed-btn" class="btn-secondary btn-sm">Clear History</button>
+          </div>
+          <div id="completed-tasks-container" class="completed-list">
+            <!-- Dynamic completed tasks injected here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Browser Extension Hub -->
+      <section id="view-extension" class="content-view">
+        <div class="card extension-hub-card">
+          <div class="ext-hero-section">
+            <div class="ext-badge">
+              <span>Universal Manifest V3 Extension</span>
+            </div>
+            <h2>Universal Browser Extension Hub</h2>
+            <p class="ext-subtitle">
+              Integrate HyperDrain directly into Chrome, Brave, Edge, or Firefox. Capture video streams, large file downloads, and web series with a single click.
+            </p>
+          </div>
+
+          <div class="ext-section-title">
+            <h3>Browser Extension Setup</h3>
+            <p>Load the unpacked extension into your browser or export a package to install on another machine:</p>
+          </div>
+
+          <div class="ext-btn-row">
+            <button id="ext-export-zip-btn" class="btn-primary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Export Extension (.zip)</span>
+            </button>
+
+            <button id="ext-open-folder-btn" class="btn-secondary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Open Extension Directory</span>
+            </button>
+          </div>
+
+          <div class="ext-steps-grid">
+            <div class="ext-step-card">
+              <div class="ext-step-number">1</div>
+              <h4>Open Extensions Page</h4>
+              <p>Navigate to <code>chrome://extensions</code> (or <code>brave://extensions</code> / <code>edge://extensions</code>).</p>
+            </div>
+
+            <div class="ext-step-card">
+              <div class="ext-step-number">2</div>
+              <h4>Enable Developer Mode</h4>
+              <p>Toggle ON the <strong>Developer mode</strong> switch in the top-right corner.</p>
+            </div>
+
+            <div class="ext-step-card">
+              <div class="ext-step-number">3</div>
+              <h4>Click "Load unpacked"</h4>
+              <p>Select the HyperDrain extension folder (or unzip exported ZIP). The HyperDrain icon will appear in your browser toolbar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 4: Telemetry & Network Diagnostics -->
+      <section id="view-analytics" class="content-view">
+        <div class="analytics-grid">
+          <div class="card stat-card">
+            <h4>Total Data Downloaded</h4>
+            <div class="stat-big" id="stat-total-downloaded">0.00 GB</div>
+            <p class="stat-desc">Persisted safely in SQLite WAL</p>
+          </div>
+          <div class="card stat-card">
+            <h4>Work-Stealing Splits</h4>
+            <div class="stat-big" id="stat-steals">0</div>
+            <p class="stat-desc">Dynamic chunk splits for slow connections</p>
+          </div>
+          <div class="card stat-card">
+            <h4>Socket Watchdog Recycles</h4>
+            <div class="stat-big" id="stat-zombies">0</div>
+            <p class="stat-desc">Stalled connections auto-recycled</p>
+          </div>
+          <div class="card stat-card">
+            <h4>Zero-Fragmentation Preallocation</h4>
+            <div class="stat-big" id="stat-fallocate">100%</div>
+            <p class="stat-desc">Linux fallocate instant disk allocation</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: Engine Settings & Online Updates -->
+      <section id="view-settings" class="content-view">
+        <div class="card settings-card">
+          <h3>Engine Configuration</h3>
+          <p class="card-subtitle">Local multi-stream settings for maximum throughput.</p>
+          
+          <div class="form-group">
+            <label>Default Download Directory</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="cfg-dir" placeholder="Loading download directory..." style="flex: 1;" />
+              <button id="cfg-browse-btn" type="button" class="btn-secondary" style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Browse...</span>
+              </button>
+            </div>
+            <small>All large files and video streams download here without subfolder clutter.</small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Default Parallel Connections per Task</label>
+              <select id="cfg-conns">
+                <option value="8">8 Streams (Conservative)</option>
+                <option value="16" selected>16 Streams (Recommended High Speed)</option>
+                <option value="32">32 Streams (Maximum Saturation for 32GB files)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Max Concurrent Large Tasks</label>
+              <select id="cfg-queue-max">
+                <option value="1">1 at a time (Full pipe per file)</option>
+                <option value="2" selected>2 at a time (Recommended)</option>
+                <option value="4">4 at a time</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Internal Local API Security Token (Hidden) -->
+          <input type="hidden" id="cfg-token" value="hyperdrain_secret_token" />
+
+          <div style="display: flex; gap: 10px; margin-top: 12px; margin-bottom: 24px;">
+            <button id="save-settings-btn" class="btn-primary">Save Engine Settings</button>
+            <button id="test-notif-btn" type="button" class="btn-secondary" style="display: flex; align-items: center; gap: 6px;">
+              <span>🔔</span>
+              <span>Test Desktop Notification</span>
+            </button>
+          </div>
+
+          <hr class="settings-divider" />
+
+          <!-- Online Update System Section -->
+          <div class="update-section">
+            <h3>Online Updates</h3>
+            <p class="card-subtitle">Keep HyperDrain updated with the latest performance and speed enhancements.</p>
+            <div class="update-status-row">
+              <div class="update-ver-indicator">
+                <span class="update-ver-label">Installed Version:</span>
+                <span class="update-ver-value">v1.0.3</span>
+              </div>
+              <button id="btn-manual-check-update" type="button" class="btn-secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                <span>Check for Updates</span>
+              </button>
+            </div>
+            <div id="manual-update-result" class="update-result-msg" style="display: none;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add Download Modal -->
+  <div id="add-modal" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h3>Add New Download</h3>
+        </div>
+        <button id="close-modal-btn" class="btn-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>URL or Magnet Link *</label>
+          <textarea id="modal-url" rows="3" placeholder="https://cdn.example.com/movie_32gb.mkv or magnet:?xt=urn:btih:..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>File Name (Optional - detected automatically)</label>
+          <input type="text" id="modal-filename" placeholder="e.g. Stranger_Things_S05_Complete_4K.zip" />
+        </div>
+
+        <div class="form-group">
+          <label>Save Destination Folder</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="modal-target-dir" placeholder="Loading destination..." style="flex: 1;" />
+            <button id="modal-browse-btn" type="button" class="btn-secondary" style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Browse...</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Parallel Streams</label>
+            <select id="modal-conns">
+              <option value="16">16 Connections</option>
+              <option value="24">24 Connections</option>
+              <option value="32" selected>32 Connections (Fastest)</option>
+            </select>
+          </div>
+        </div>
+
+        <details class="advanced-details">
+          <summary>Advanced Authentication Headers (Cookies, Referer)</summary>
+          <div class="form-group" style="margin-top: 10px;">
+            <label>Cookie Header</label>
+            <input type="text" id="modal-cookie" placeholder="session=abc123xyz; auth=token;" />
+          </div>
+          <div class="form-group">
+            <label>Referer Header</label>
+            <input type="text" id="modal-referer" placeholder="https://website.com/watch/series-download" />
+          </div>
+        </details>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel-modal-btn" class="btn-secondary">Cancel</button>
+        <button id="start-download-btn" class="btn-primary">
+          <span>Start Download</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online Update Modal (Only opens when an update is available or clicked) -->
+  <div id="updateModal" class="modal-backdrop update-modal-backdrop" style="display:none;">
+    <div class="modal-dialog update-modal-card">
+      <div class="modal-header">
+        <div class="update-modal-title-group">
+          <div class="update-modal-badge">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title">HyperDrain Update Available</h3>
+            <span id="updateModalVersionSub" class="update-modal-version-sub"></span>
+          </div>
+        </div>
+        <button id="btnCloseUpdateModal" class="btn-close" aria-label="Close update modal">&times;</button>
+      </div>
+
+      <div class="modal-body update-modal-body">
+        <div class="update-version-badge-container">
+          <span class="update-ver-tag ver-current">Current: <b id="updateBadgeCurrent">v1.0.3</b></span>
+          <span class="update-ver-arrow">→</span>
+          <span class="update-ver-tag ver-latest">New: <b id="updateBadgeLatest">v1.0.3</b></span>
+        </div>
+
+        <div class="update-changelog-card">
+          <div class="update-changelog-header">Release Information & Changelog:</div>
+          <div id="updateChangelogContent" class="update-changelog-content"></div>
+        </div>
+
+        <div id="updateProgressBlock" class="update-progress-block" style="display:none;">
+          <div id="updateBgBanner" class="update-bg-banner">
+            <div class="update-bg-banner-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#10b981" stroke-width="2.2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <polyline points="9 12 11 14 15 10"/>
+              </svg>
+            </div>
+            <div class="update-bg-banner-text">
+              <strong>Safe to close dialog</strong>
+              <span>Update is downloading in the background. Active tasks will continue without interruption.</span>
+            </div>
+          </div>
+          <div class="update-progress-info">
+            <span id="updateProgressLabel">Downloading update...</span>
+            <span id="updateProgressPercent">0%</span>
+          </div>
+          <div class="update-progress-bar-track">
+            <div id="updateProgressBarFill" class="update-progress-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div class="update-support-card">
+          <div class="update-support-header">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#60a5fa" stroke-width="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+            </svg>
+            <span>If you're facing a problem, feel free to contact the developer:</span>
+          </div>
+          <div class="update-support-contacts">
+            <span class="support-contact-item"><b>Email:</b> <span class="support-contact-val">hamza.zafar4022211@gmail.com</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer update-modal-footer">
+        <button id="btnUpdateDismiss" class="btn-secondary">Later</button>
+        <button id="btnUpdateExecute" class="btn-primary btn-update-action">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="btnUpdateExecuteText">Update Now</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=4.0"></script>
+</body>
+</html>

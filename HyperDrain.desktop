@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HyperDrain
+Comment=32GB High-Speed Resilient Downloader
+Exec="/run/media/hamza/Disk D/downloader/start.sh"
+Icon="/run/media/hamza/Disk D/downloader/extension/icons/icon128.png"
+Terminal=false
+Categories=Network;FileTransfer;
+StartupWMClass=hyperdrain
