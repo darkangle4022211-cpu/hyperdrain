@@ -791,9 +791,19 @@ function setupIPCHandlers() {
 
     const debPath = pkgPath;
     const currentPid = process.pid;
-    const scriptPath = path.join(os.tmpdir(), 'hyperdrain_apply_update.sh');
+    const scriptPath = path.join(os.tmpdir(), 'hd_updater.sh');
+    const disp = process.env.DISPLAY || ':0';
+    const xauth = process.env.XAUTHORITY || '';
+    const wayland = process.env.WAYLAND_DISPLAY || '';
+    const xdgRuntime = process.env.XDG_RUNTIME_DIR || '';
+
     const scriptContent = `#!/usr/bin/env bash
-# Wait for old HyperDrain process to cleanly release database and sockets
+export DISPLAY="${disp}"
+export XAUTHORITY="${xauth}"
+export WAYLAND_DISPLAY="${wayland}"
+export XDG_RUNTIME_DIR="${xdgRuntime}"
+
+# 1. Wait for old HyperDrain process to cleanly exit
 OLD_PID=${currentPid}
 if [ -n "$OLD_PID" ]; then
   kill -TERM "$OLD_PID" 2>/dev/null || true
@@ -806,15 +816,27 @@ if [ -n "$OLD_PID" ]; then
   kill -9 "$OLD_PID" 2>/dev/null || true
 fi
 
-# Ensure no orphan backend processes linger
-pkill -f 'hyperdrain' 2>/dev/null || true
+# 2. Terminate backend engine without matching updater script
+pkill -x 'hyperdrain-engine' 2>/dev/null || true
 sleep 0.5
 
-# Install new .deb package cleanly
+# 3. Prompt for administrative installation via pkexec (matches Pulsar Audio / Aero Player)
 INSTALLED=0
 if command -v pkexec >/dev/null 2>&1; then
   pkexec dpkg -i "${debPath}" && INSTALLED=1
 fi
+
+# Fallback: graphical password prompt via zenity if pkexec fails
+if [ "$INSTALLED" -ne 1 ]; then
+  if command -v zenity >/dev/null 2>&1; then
+    PASS=$(zenity --password --title="HyperDrain System Update" 2>/dev/null)
+    if [ -n "$PASS" ]; then
+      echo "$PASS" | sudo -S dpkg -i "${debPath}" && INSTALLED=1
+    fi
+  fi
+fi
+
+# Final fallback: user-space rootless extraction
 if [ "$INSTALLED" -ne 1 ]; then
   USER_APP_DIR="$HOME/.local/share/hyperdrain_app"
   mkdir -p "$USER_APP_DIR"
@@ -823,32 +845,16 @@ if [ "$INSTALLED" -ne 1 ]; then
   fi
 fi
 
-# Ensure user desktop launcher points to updated binary
-DESKTOP_DIR="$HOME/.local/share/applications"
-mkdir -p "$DESKTOP_DIR"
-cat << 'EOF_DESK' > "$DESKTOP_DIR/hyperdrain.desktop"
-[Desktop Entry]
-Name=HyperDrain
-Comment=32GB High-Speed Resilient Downloader with Universal Extension
-Exec=$HOME/.local/bin/hyperdrain %U
-Terminal=false
-Type=Application
-Icon=hyperdrain
-StartupWMClass=hyperdrain
-Categories=Network;FileTransfer;AudioVideo;
-Keywords=download;downloader;video;series;m3u8;hls;fallocate;
-EOF_DESK
-chmod 644 "$DESKTOP_DIR/hyperdrain.desktop" 2>/dev/null || true
-
-# Launch newly updated application
+# 4. Relaunch newly updated application cleanly
 sleep 0.5
-if [ -x "$HOME/.local/bin/hyperdrain" ]; then
-  nohup "$HOME/.local/bin/hyperdrain" >/dev/null 2>&1 &
+if [ -x /usr/bin/hyperdrain ]; then
+  nohup /usr/bin/hyperdrain >/dev/null 2>&1 &
+elif [ -x /opt/hyperdrain/hyperdrain ]; then
+  nohup /opt/hyperdrain/hyperdrain --no-sandbox >/dev/null 2>&1 &
 elif [ -x "$HOME/.local/share/hyperdrain_app/opt/hyperdrain/hyperdrain" ]; then
   nohup "$HOME/.local/share/hyperdrain_app/opt/hyperdrain/hyperdrain" --no-sandbox >/dev/null 2>&1 &
-elif [ -x /usr/bin/hyperdrain ]; then
-  nohup /usr/bin/hyperdrain >/dev/null 2>&1 &
 fi
+
 rm -f "${debPath}" "${scriptPath}" 2>/dev/null
 `;
 
