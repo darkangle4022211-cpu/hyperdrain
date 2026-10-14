@@ -4,7 +4,7 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-VERSION="${1:-$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.3")}"
+VERSION="${1:-$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.4")}"
 PKG_NAME="hyperdrain_${VERSION}_amd64"
 
 echo "========================================================="

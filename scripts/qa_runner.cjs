@@ -348,10 +348,10 @@ async function runQASuite() {
     await cdp.eval(`
       handleUpdateAvailable({
         updateAvailable: true,
-        currentVersion: '1.0.3',
-        latestVersion: '1.0.4',
+        currentVersion: '1.0.4',
+        latestVersion: '1.0.5',
         releaseNotes: '• High-speed multi-threaded engine upgrade\\n• Zero-CPU idle optimization',
-        downloadUrl: 'https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.4/hyperdrain_1.0.4_amd64.deb'
+        downloadUrl: 'https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/hyperdrain_1.0.5_amd64.deb'
       }, true);
     `);
     await sleep(300);

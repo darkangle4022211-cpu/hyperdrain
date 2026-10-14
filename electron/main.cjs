@@ -26,7 +26,7 @@ const EXTENSION_DIR = path.join(ROOT_DIR, 'extension');
 const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 const CORE_URL = 'http://127.0.0.1:6880';
 const GITHUB_REPO = 'darkangle4022211-cpu/hyperdrain';
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 function getAppIcon() {
   const iconPaths = [
