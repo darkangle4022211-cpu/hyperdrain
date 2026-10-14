@@ -1,25 +1,25 @@
 {
   "name": "hyperdrain",
   "repo": "darkangle4022211-cpu/hyperdrain",
-  "version": "1.0.4",
-  "tag": "v1.0.4",
-  "changelog": "• Direct Graphical Authentication: Resolved updater process management so pkexec/zenity sudo password prompt appears reliably on restart\n• Resilient Multi-Threaded Engine: High-speed download optimizations with 6-worker chunking and SQLite WAL state journaling\n• Seamless Auto-Restart: Refined update script execution ensuring clean termination and immediate relaunch of the latest binary\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
+  "version": "1.0.5",
+  "tag": "v1.0.5",
+  "changelog": "• Verified Production Release v1.0.5: Native Debian update synchronization and release parity\n• Direct Graphical Authentication: Seamless pkexec / GUI password prompt on restart\n• Resilient Multi-Threaded Engine: High-speed download optimizations with 6-worker chunking and SQLite WAL state journaling\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
   "support": {
     "message": "If you're facing a problem, feel free to contact the developer:",
     "email": "hamza.zafar4022211@gmail.com"
   },
   "platforms": {
     "linux-deb-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.4/hyperdrain_1.0.4_amd64.deb",
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/hyperdrain_1.0.5_amd64.deb",
       "sha256": "",
-      "size": 162113582,
-      "filename": "hyperdrain_1.0.4_amd64.deb"
+      "size": 162114920,
+      "filename": "hyperdrain_1.0.5_amd64.deb"
     },
     "windows-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.4/HyperDrain-Setup-1.0.4.exe",
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/HyperDrain-Setup-1.0.5.exe",
       "sha256": "",
       "size": 0,
-      "filename": "HyperDrain-Setup-1.0.4.exe"
+      "filename": "HyperDrain-Setup-1.0.5.exe"
     }
   }
 }
