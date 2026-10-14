@@ -377,7 +377,9 @@ function computeTaskMetrics(task, existingCard = null) {
     progressLabel = hasTotal ? `${pct}% (Paused)` : `Paused`;
     displayBarWidth = hasTotal ? `${Math.max(Number(pct), 2)}%` : "10%";
   } else if (task.status === "error") {
-    if (task.error_message && (task.error_message.includes("expired") || task.error_message.includes("refresh"))) {
+    if (task.error_message && (task.error_message.includes("disk") || task.error_message.includes("space"))) {
+      progressLabel = `⚠️ ${task.error_message}`;
+    } else if (task.error_message && (task.error_message.includes("expired") || task.error_message.includes("refresh"))) {
       progressLabel = `Stream link expired — Refresh episode in Brave & click ⚡ Download`;
     } else {
       progressLabel = task.error_message ? task.error_message : `Failed - Click Retry`;
@@ -820,7 +822,8 @@ startDownloadBtn.addEventListener("click", async () => {
       document.getElementById("modal-filename").value = "";
       addModal.classList.remove("show");
     } else {
-      alert("Failed to start download. Error code: " + res.status);
+      const errText = await res.text();
+      alert("Cannot start download: " + (errText.trim() || ("Error " + res.status)));
     }
   } catch (err) {
     alert("Could not reach HyperDrain engine: " + err.message);
@@ -1120,8 +1123,8 @@ function handleUpdateAvailable(res, autoOpen = false) {
   }
 
   updaterState.availableUpdate = res;
-  const latestVer = 'v' + String(res.latestVersion || '1.0.5').replace(/^v/, '');
-  const currentVer = 'v' + String(res.currentVersion || '1.0.5').replace(/^v/, '');
+  const latestVer = 'v' + String(res.latestVersion || '1.0.6').replace(/^v/, '');
+  const currentVer = 'v' + String(res.currentVersion || '1.0.6').replace(/^v/, '');
 
   if (btnUpdateAvailable) {
     btnUpdateAvailable.style.display = "inline-flex";
@@ -1179,7 +1182,7 @@ async function triggerCheckForUpdates(manual = false) {
         }
         if (manualUpdateResult) {
           manualUpdateResult.className = "update-result-msg update-result-success";
-          manualUpdateResult.textContent = "HyperDrain is up to date (v1.0.5). No updates available.";
+          manualUpdateResult.textContent = "HyperDrain is up to date (v1.0.6). No updates available.";
         }
       } else if (!updaterState.availableUpdate && btnUpdateAvailable && !updaterState.isReadyToInstall) {
         btnUpdateAvailable.style.display = "none";
@@ -1197,6 +1200,7 @@ window.handleUpdateAvailable = handleUpdateAvailable;
 window.triggerCheckForUpdates = triggerCheckForUpdates;
 window.openUpdateModal = openUpdateModal;
 window.closeUpdateModal = closeUpdateModal;
+window.renderTasks = renderTasks;
 
 if (btnUpdateAvailable) {
   btnUpdateAvailable.addEventListener("click", () => {
@@ -1337,5 +1341,5 @@ window.extractTask = async function(taskId) {
   }
 };
 
-
-
+window.renderTasks = renderTasks;
+window.computeTaskMetrics = computeTaskMetrics;

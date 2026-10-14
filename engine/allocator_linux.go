@@ -5,6 +5,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -39,3 +40,32 @@ func GetDiskFreeSpace(path string) (uint64, error) {
 	// Available blocks * block size
 	return stat.Bavail * uint64(stat.Bsize), nil
 }
+
+// GetAvailableSpaceForPath returns available free disk space for any target file or directory path,
+// walking up to the nearest existing directory or mount point.
+func GetAvailableSpaceForPath(targetPath string) (uint64, error) {
+	cleanPath := filepath.Clean(targetPath)
+	dir := cleanPath
+	for {
+		fi, err := os.Stat(dir)
+		if err == nil {
+			if fi.IsDir() {
+				return GetDiskFreeSpace(dir)
+			}
+			return GetDiskFreeSpace(filepath.Dir(dir))
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir || parent == "" || parent == "." {
+			break
+		}
+		dir = parent
+	}
+	// Fallback to home dir or current working dir
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if free, err := GetDiskFreeSpace(home); err == nil {
+			return free, nil
+		}
+	}
+	return GetDiskFreeSpace(".")
+}
+

@@ -1,25 +1,25 @@
 {
   "name": "hyperdrain",
   "repo": "darkangle4022211-cpu/hyperdrain",
-  "version": "1.0.5",
-  "tag": "v1.0.5",
-  "changelog": "• Verified Production Release v1.0.5: Native Debian update synchronization and release parity\n• Direct Graphical Authentication: Seamless pkexec / GUI password prompt on restart\n• Resilient Multi-Threaded Engine: High-speed download optimizations with 6-worker chunking and SQLite WAL state journaling\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
+  "version": "1.0.6",
+  "tag": "v1.0.6",
+  "changelog": "• Smart Pre-flight Disk Space Verification: Automatically checks available space on target drive before starting download; prevents starting if space is insufficient and alerts the user with exact required vs available storage\n• UI & Desktop Notification Alerts: Clear visual warning badges and error notifications for storage limits\n• Resilient Multi-Threaded Engine: High-speed download optimizations with 6-worker chunking and SQLite WAL state journaling\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
   "support": {
     "message": "If you're facing a problem, feel free to contact the developer:",
     "email": "hamza.zafar4022211@gmail.com"
   },
   "platforms": {
     "linux-deb-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/hyperdrain_1.0.5_amd64.deb",
-      "sha256": "",
-      "size": 162114920,
-      "filename": "hyperdrain_1.0.5_amd64.deb"
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.6/hyperdrain_1.0.6_amd64.deb",
+      "sha256": "c1f4b6b765b3365b5385bf0be20881134a6cd4d46ef88212001dd232156e1bb9",
+      "size": 162129778,
+      "filename": "hyperdrain_1.0.6_amd64.deb"
     },
     "windows-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/HyperDrain-Setup-1.0.5.exe",
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.6/HyperDrain-Setup-1.0.6.exe",
       "sha256": "",
       "size": 0,
-      "filename": "HyperDrain-Setup-1.0.5.exe"
+      "filename": "HyperDrain-Setup-1.0.6.exe"
     }
   }
 }

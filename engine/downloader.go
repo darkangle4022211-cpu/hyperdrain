@@ -133,7 +133,6 @@ func (e *DownloadEngine) startTask(task *DownloadTask) {
 	task.mu.Unlock()
 
 	e.db.SaveTask(task)
-	NotifyDownloadStarted(task.Name, task.Connections)
 
 	defer func() {
 		task.mu.Lock()
@@ -195,6 +194,46 @@ func (e *DownloadEngine) startTask(task *DownloadTask) {
 		e.db.SaveTask(task)
 	}
 
+	// Pre-flight Disk Space Check on Target Directory:
+	// If the target disk does not have enough free space for the file, the download MUST NOT start.
+	targetDir := filepath.Dir(task.TargetFile)
+	availTarget, errSpace := GetAvailableSpaceForPath(targetDir)
+	needed := size - task.DownloadedBytes
+	if needed <= 0 && size > 0 {
+		needed = size
+	}
+	if errSpace == nil && needed > 0 && int64(availTarget) < needed {
+		errStr := fmt.Sprintf("Target disk does not have enough space: %s required, but only %s available", FormatBytes(needed), FormatBytes(int64(availTarget)))
+		log.Printf("[HyperDrain] %s for %s", errStr, task.Name)
+		task.mu.Lock()
+		task.Status = StatusError
+		task.ErrorMessage = errStr
+		task.mu.Unlock()
+		e.db.SaveTask(task)
+		NotifyInsufficientDiskSpace(task.Name, needed, int64(availTarget))
+		return
+	}
+	if errSpace == nil && size <= 0 && availTarget < 20*1024*1024 {
+		errStr := fmt.Sprintf("Target disk is almost full: only %s available", FormatBytes(int64(availTarget)))
+		log.Printf("[HyperDrain] %s for %s", errStr, task.Name)
+		task.mu.Lock()
+		task.Status = StatusError
+		task.ErrorMessage = errStr
+		task.mu.Unlock()
+		e.db.SaveTask(task)
+		NotifyInsufficientDiskSpace(task.Name, 20*1024*1024, int64(availTarget))
+		return
+	}
+
+	// Notify user that verified download has commenced
+	if task.RetryCount == 0 {
+		conns := task.Connections
+		if !supportsRange || size <= 0 {
+			conns = 1
+		}
+		NotifyDownloadStarted(task.Name, conns)
+	}
+
 	homeDir, _ := os.UserHomeDir()
 	stagingDir := filepath.Join(homeDir, ".cache", "hyperdrain", "staging", task.ID)
 	os.MkdirAll(stagingDir, 0755)
@@ -226,15 +265,9 @@ func (e *DownloadEngine) startTask(task *DownloadTask) {
 	}
 
 	if (!supportsRange || size <= 0) && len(task.Segments) == 0 {
-		if task.RetryCount == 0 {
-			NotifyDownloadStarted(task.Name, 1)
-		}
 		// Single-stream fallback
 		e.downloadSingleStream(ctx, task, file)
 	} else {
-		if task.RetryCount == 0 {
-			NotifyDownloadStarted(task.Name, task.Connections)
-		}
 		// Multi-part accelerated parallel download
 		e.downloadParallel(ctx, task, file)
 	}

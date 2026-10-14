@@ -4,6 +4,7 @@ package engine
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"unsafe"
 )
@@ -38,3 +39,31 @@ func GetDiskFreeSpace(path string) (uint64, error) {
 	}
 	return uint64(freeBytesAvailable), nil
 }
+
+// GetAvailableSpaceForPath returns available free disk space for any target file or directory path,
+// walking up to the nearest existing directory or root drive.
+func GetAvailableSpaceForPath(targetPath string) (uint64, error) {
+	cleanPath := filepath.Clean(targetPath)
+	dir := cleanPath
+	for {
+		fi, err := os.Stat(dir)
+		if err == nil {
+			if fi.IsDir() {
+				return GetDiskFreeSpace(dir)
+			}
+			return GetDiskFreeSpace(filepath.Dir(dir))
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir || parent == "" || parent == "." {
+			break
+		}
+		dir = parent
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if free, err := GetDiskFreeSpace(home); err == nil {
+			return free, nil
+		}
+	}
+	return GetDiskFreeSpace(".")
+}
+

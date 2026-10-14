@@ -158,6 +158,28 @@ func NotifyDownloadStarted(fileName string, connections int) {
 	}()
 }
 
+// NotifyInsufficientDiskSpace alerts the user when there is not enough disk space for a download
+func NotifyInsufficientDiskSpace(fileName string, requiredBytes, availableBytes int64) {
+	notifyMu.Lock()
+	key := "disk_space_" + fileName
+	lastTime, exists := lastNotificationTime[key]
+	if exists && time.Since(lastTime) < 10*time.Second {
+		notifyMu.Unlock()
+		return
+	}
+	lastNotificationTime[key] = time.Now()
+	notifyMu.Unlock()
+
+	title := "HyperDrain ⚠️ Insufficient Disk Space"
+	body := fmt.Sprintf("File: %s\nTarget disk does not have enough space!\nRequired: %s | Available: %s",
+		fileName, FormatBytes(requiredBytes), FormatBytes(availableBytes))
+	log.Printf("[NOTIFY] Insufficient disk space for %s: required %s, available %s", fileName, FormatBytes(requiredBytes), FormatBytes(availableBytes))
+	go func() {
+		_ = SendUbuntuNotification(title, body, "critical")
+		PlayErrorSound()
+	}()
+}
+
 // NotifyDownloadStopped sends a native desktop notification when a download stops midway.
 // Sound is NOT played here — only the system notification sound from notify-send.
 func NotifyDownloadStopped(fileName, reason string) {

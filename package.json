@@ -1,7 +1,7 @@
 {
   "name": "hyperdrain",
   "productName": "HyperDrain",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "32GB High-Speed Resilient Downloader with Universal Extension",
   "main": "electron/main.cjs",
   "type": "commonjs",

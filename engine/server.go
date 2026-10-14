@@ -198,6 +198,16 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 		req.SuggestedName = ParseMagnetName(req.URL)
 	}
 
+	targetDir := req.TargetDir
+	if targetDir == "" {
+		targetDir = s.settings.DownloadDir
+	}
+	availSpace, errSpace := GetAvailableSpaceForPath(targetDir)
+	if errSpace == nil && availSpace < 20*1024*1024 {
+		http.Error(w, fmt.Sprintf("Target disk does not have enough space: only %s available", FormatBytes(int64(availSpace))), http.StatusBadRequest)
+		return
+	}
+
 	task, err := s.engine.AddTask(
 		req.URL,
 		req.SuggestedName,
@@ -568,6 +578,12 @@ func (s *Server) handleDownloadStream(w http.ResponseWriter, r *http.Request) {
 		targetDir = s.settings.DownloadDir
 	}
 
+	availSpace, errSpace := GetAvailableSpaceForPath(targetDir)
+	if errSpace == nil && availSpace < 20*1024*1024 {
+		http.Error(w, fmt.Sprintf("Target disk does not have enough space: only %s available", FormatBytes(int64(availSpace))), http.StatusBadRequest)
+		return
+	}
+
 	cleanReferer := strings.TrimSpace(req.Referer)
 	if cleanReferer != "" {
 		if parsed, err := url.Parse(cleanReferer); err == nil && parsed.Path == "" {
@@ -782,6 +798,12 @@ func (s *Server) handleDownloadStreamBatch(w http.ResponseWriter, r *http.Reques
 	baseDir := s.settings.DownloadDir
 	if req.TargetDir != "" {
 		baseDir = req.TargetDir
+	}
+
+	availSpace, errSpace := GetAvailableSpaceForPath(baseDir)
+	if errSpace == nil && availSpace < 50*1024*1024 {
+		http.Error(w, fmt.Sprintf("Target disk does not have enough space: only %s available", FormatBytes(int64(availSpace))), http.StatusBadRequest)
+		return
 	}
 
 	formatSelector := req.FormatID
@@ -1500,6 +1522,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			var baseDownloaded int64 = 0
 			var maxDlForCurrentFormat int64 = 0
 			var currentFormatId string = ""
+			var spaceChecked bool = false
 			scanner := bufio.NewScanner(stdout)
 			for scanner.Scan() {
 				line := scanner.Text()
@@ -1514,6 +1537,29 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 						estFloat, _ := strconv.ParseFloat(parts[2], 64)
 						spFloat, _ := strconv.ParseFloat(parts[3], 64)
 						etaFloat, _ := strconv.ParseFloat(parts[4], 64)
+
+						streamTotal := int64(totFloat)
+						if streamTotal <= 0 {
+							streamTotal = int64(estFloat)
+						}
+						if streamTotal > 0 && !spaceChecked {
+							spaceChecked = true
+							availTarget, errSpace := GetAvailableSpaceForPath(filepath.Dir(task.TargetFile))
+							if errSpace == nil && int64(availTarget) < streamTotal {
+								errStr := fmt.Sprintf("Target disk does not have enough space: %s required, but only %s available", FormatBytes(streamTotal), FormatBytes(int64(availTarget)))
+								log.Printf("[HyperDrain Stream] %s for %s", errStr, task.Name)
+								task.mu.Lock()
+								task.Status = StatusError
+								task.ErrorMessage = errStr
+								task.mu.Unlock()
+								s.db.SaveTask(task)
+								NotifyInsufficientDiskSpace(task.Name, streamTotal, int64(availTarget))
+								if cmd != nil && cmd.Process != nil {
+									_ = cmd.Process.Kill()
+								}
+								return
+							}
+						}
 
 						formatId := ""
 						if len(parts) >= 6 {
