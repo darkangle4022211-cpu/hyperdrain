@@ -29,6 +29,9 @@ func main() {
 		}
 	}
 	appDataDir := filepath.Join(configDir, "hyperdrain")
+	if customDir := os.Getenv("HYPERDRAIN_DATA_DIR"); customDir != "" {
+		appDataDir = customDir
+	}
 	if err := os.MkdirAll(appDataDir, 0755); err != nil {
 		appDataDir = "."
 	}
@@ -58,7 +61,12 @@ func main() {
 	}
 	savedDir := db.GetSetting("download_dir", "")
 	if savedDir != "" {
-		settings.DownloadDir = savedDir
+		healedDir := resolveExistingDir(savedDir, downloadDir)
+		settings.DownloadDir = healedDir
+		if healedDir != savedDir {
+			db.SetSetting("download_dir", healedDir)
+			fmt.Printf("[HyperDrain] Auto-healed deleted/unmounted download directory: '%s' -> '%s'\n", savedDir, healedDir)
+		}
 	}
 
 	fmt.Println("=========================================================")
@@ -89,7 +97,11 @@ func main() {
 	server.RegisterRoutes(mux, webUIDir)
 
 	// 6. Start Local HTTP & WebSocket Server
-	serverAddr := "127.0.0.1:" + DefaultPort
+	activePort := DefaultPort
+	if p := os.Getenv("HYPERDRAIN_PORT"); p != "" {
+		activePort = p
+	}
+	serverAddr := "127.0.0.1:" + activePort
 	httpServer := &http.Server{
 		Addr:    serverAddr,
 		Handler: mux,
@@ -251,3 +263,28 @@ StartupWMClass=hyperdrain
 	}
 }
 
+func resolveExistingDir(targetDir, fallbackDir string) string {
+	curr := filepath.Clean(targetDir)
+	for curr != "" && curr != "." && curr != "/" {
+		if fi, err := os.Stat(curr); err == nil && fi.IsDir() {
+			return curr
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	if fi, err := os.Stat(fallbackDir); err == nil && fi.IsDir() {
+		return fallbackDir
+	}
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		dl := filepath.Join(home, "Downloads")
+		if fi, err := os.Stat(dl); err == nil && fi.IsDir() {
+			return dl
+		}
+		return home
+	}
+	return "."
+}

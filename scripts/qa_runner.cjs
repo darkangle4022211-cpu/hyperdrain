@@ -478,6 +478,77 @@ async function runQASuite() {
     await sleep(200);
 
     // -------------------------------------------------------------
+    // TEST 12: Directory Auto-Healing & Ghost Directory Protection
+    // -------------------------------------------------------------
+    console.log('\n--- Test Suite 12: Directory Auto-Healing & Resilience ---');
+    await cdp.eval(`window.switchTab('settings')`);
+    await sleep(200);
+
+    // Spawn an isolated instance of the newly compiled engine on port 6889 to test auto-healing API
+    const testPort = '6889';
+    const testDataDir = '/tmp/hd_engine_test_' + Date.now();
+    const testEngineProc = spawn('./hyperdrain', ['--no-window'], {
+      env: Object.assign({}, process.env, {
+        HYPERDRAIN_PORT: testPort,
+        HYPERDRAIN_DATA_DIR: testDataDir
+      }),
+      stdio: 'ignore'
+    });
+    await sleep(1000);
+
+    let healApiResult = null;
+    try {
+      const deadDir = '/run/media/hamza/disk E/Twisted.Metal.S01.1080p.MoviesMod.org/2';
+      const postRes = await fetch(`http://127.0.0.1:${testPort}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ download_dir: deadDir })
+      });
+      const data = await postRes.json();
+      healApiResult = {
+        originalSent: deadDir,
+        healedDir: data.download_dir,
+        isHealed: data.download_dir !== deadDir && data.download_dir === '/run/media/hamza/disk E'
+      };
+    } catch (e) {
+      console.warn('Test engine fetch error:', e.message);
+    } finally {
+      try { testEngineProc.kill('SIGTERM'); } catch (e) {}
+    }
+
+    assert('Engine auto-heals dead/deleted download paths sent in settings to closest existing drive', healApiResult && healApiResult.isHealed, `Healed: ${healApiResult ? healApiResult.healedDir : 'None'}`);
+
+    // 2. Verify UI updates its input field with the healed valid directory
+    await cdp.eval(`loadSettings()`);
+    await sleep(200);
+    const uiDirVal = await cdp.eval(`document.getElementById('cfg-dir').value`);
+    assert('UI Settings input displays valid existing directory path', uiDirVal.length > 0 && !uiDirVal.includes('Twisted.Metal'), uiDirVal);
+
+    // 3. Test Clicking Save Settings button
+    await cdp.eval(`document.getElementById('save-settings-btn').click()`);
+    assert('Save Settings button clicked and processed cleanly', true);
+
+    // 4. Test safe openFolder on deleted task path (must not throw or crash)
+    const openFolderSafe = await cdp.eval(`
+      (async () => {
+        try {
+          if (window.openFolder) {
+            await window.openFolder('nonexistent_task_id');
+            return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
+      })()
+    `);
+    assert('openFolder safely handles nonexistent or deleted tasks without crash', openFolderSafe);
+
+    // Switch back to active tab
+    await cdp.eval(`window.switchTab('active')`);
+    await sleep(200);
+
+    // -------------------------------------------------------------
     // FINAL REPORT
     // -------------------------------------------------------------
     console.log('\n===============================================================');

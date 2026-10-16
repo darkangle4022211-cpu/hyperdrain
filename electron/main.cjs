@@ -627,12 +627,27 @@ function setupIPCHandlers() {
     return mainWindow ? mainWindow.isMaximized() : false;
   });
 
+  function resolveExistingDir(targetPath) {
+    if (!targetPath) return app.getPath('downloads');
+    let curr = path.resolve(targetPath);
+    while (curr && curr !== path.dirname(curr)) {
+      try {
+        if (fs.existsSync(curr) && fs.statSync(curr).isDirectory()) {
+          return curr;
+        }
+      } catch (e) {}
+      curr = path.dirname(curr);
+    }
+    return app.getPath('downloads');
+  }
+
   ipcMain.handle('choose-folder', async (_event, defaultPath) => {
     if (!mainWindow) return { cancelled: true };
 
+    const safeDefault = resolveExistingDir(defaultPath);
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Select HyperDrain Download Directory',
-      defaultPath: defaultPath || app.getPath('downloads'),
+      defaultPath: safeDefault,
       properties: ['openDirectory', 'createDirectory']
     });
 
@@ -662,7 +677,8 @@ function setupIPCHandlers() {
   ipcMain.handle('open-path', async (_event, targetPath) => {
     if (!targetPath) return false;
     try {
-      await shell.openPath(targetPath);
+      const safePath = resolveExistingDir(targetPath);
+      await shell.openPath(safePath);
       return true;
     } catch (e) {
       return false;
@@ -672,7 +688,13 @@ function setupIPCHandlers() {
   ipcMain.handle('show-item-in-folder', async (_event, filePath) => {
     if (!filePath) return false;
     try {
-      shell.showItemInFolder(filePath);
+      if (fs.existsSync(filePath)) {
+        shell.showItemInFolder(filePath);
+        return true;
+      }
+      const dir = path.dirname(filePath);
+      const safeDir = resolveExistingDir(dir);
+      await shell.openPath(safeDir);
       return true;
     } catch (e) {
       return false;

@@ -35,3 +35,29 @@ func TestGetAvailableSpaceForPath(t *testing.T) {
 		t.Errorf("Expected 32.00 GB, got %s", fb)
 	}
 }
+
+func TestResolveExistingDir(t *testing.T) {
+	tmpDir := os.TempDir()
+	realSubDir := filepath.Join(tmpDir, "hd_real_test_dir")
+	_ = os.MkdirAll(realSubDir, 0755)
+	defer os.RemoveAll(realSubDir)
+
+	// Case 1: Existing directory returns itself
+	if res := ResolveExistingDir(realSubDir); res != realSubDir {
+		t.Errorf("Expected %s, got %s", realSubDir, res)
+	}
+
+	// Case 2: Deleted/non-existent deep path resolves to closest existing ancestor
+	deadPath := filepath.Join(realSubDir, "deleted_season", "episodes", "subfolder")
+	resolved := ResolveExistingDir(deadPath)
+	if resolved != realSubDir {
+		t.Errorf("Expected dead path to resolve to ancestor %s, got %s", realSubDir, resolved)
+	}
+
+	// Case 3: Empty path resolves to valid directory
+	emptyRes := ResolveExistingDir("")
+	if fi, err := os.Stat(emptyRes); err != nil || !fi.IsDir() {
+		t.Errorf("Expected empty path to resolve to existing directory, got %s", emptyRes)
+	}
+}
+

@@ -202,6 +202,7 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 	if targetDir == "" {
 		targetDir = s.settings.DownloadDir
 	}
+	targetDir = ResolveExistingDir(targetDir)
 	availSpace, errSpace := GetAvailableSpaceForPath(targetDir)
 	if errSpace == nil && availSpace < 20*1024*1024 {
 		http.Error(w, fmt.Sprintf("Target disk does not have enough space: only %s available", FormatBytes(int64(availSpace))), http.StatusBadRequest)
@@ -211,7 +212,7 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 	task, err := s.engine.AddTask(
 		req.URL,
 		req.SuggestedName,
-		req.TargetDir,
+		targetDir,
 		req.Cookie,
 		req.Referer,
 		req.UserAgent,
@@ -271,6 +272,29 @@ func (s *Server) handleClearCompleted(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"cleared"}`))
 }
 
+func ResolveExistingDir(targetDir string) string {
+	curr := filepath.Clean(targetDir)
+	for curr != "" && curr != "." && curr != "/" {
+		if fi, err := os.Stat(curr); err == nil && fi.IsDir() {
+			return curr
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		dl := filepath.Join(home, "Downloads")
+		if fi, err := os.Stat(dl); err == nil && fi.IsDir() {
+			return dl
+		}
+		return home
+	}
+	return "."
+}
+
 func (s *Server) openFolder(taskID string) {
 	s.engine.mu.RLock()
 	task, exists := s.engine.activeTasks[taskID]
@@ -278,7 +302,8 @@ func (s *Server) openFolder(taskID string) {
 
 	if exists {
 		dir := filepath.Dir(task.TargetFile)
-		exec.Command("xdg-open", dir).Start()
+		safeDir := ResolveExistingDir(dir)
+		exec.Command("xdg-open", safeDir).Start()
 	}
 }
 
@@ -294,12 +319,14 @@ func (s *Server) extractTaskArchive(taskID string) {
 }
 
 func (s *Server) handleGetStats(w http.ResponseWriter, r *http.Request) {
+	s.settings.DownloadDir = ResolveExistingDir(s.settings.DownloadDir)
 	telemetry := s.engine.GetTelemetry()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(telemetry)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	s.settings.DownloadDir = ResolveExistingDir(s.settings.DownloadDir)
 	if r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(s.settings)
@@ -313,8 +340,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newSettings.DownloadDir != "" {
-		s.settings.DownloadDir = newSettings.DownloadDir
-		s.db.SetSetting("download_dir", newSettings.DownloadDir)
+		safeDir := ResolveExistingDir(newSettings.DownloadDir)
+		s.settings.DownloadDir = safeDir
+		s.db.SetSetting("download_dir", safeDir)
 	}
 	if newSettings.DefaultConnections > 0 {
 		s.settings.DefaultConnections = newSettings.DefaultConnections
@@ -326,16 +354,13 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChooseFolder(w http.ResponseWriter, r *http.Request) {
-	initialDir := s.settings.DownloadDir
-	var cmd *exec.Cmd
-	if initialDir != "" {
-		if fi, err := os.Stat(initialDir); err == nil && fi.IsDir() {
-			cmd = exec.Command("zenity", "--file-selection", "--directory", "--title=Select Download Destination Folder", "--filename="+filepath.Clean(initialDir)+"/")
-		}
+	initialDir := ResolveExistingDir(s.settings.DownloadDir)
+	if initialDir != s.settings.DownloadDir {
+		s.settings.DownloadDir = initialDir
+		s.db.SetSetting("download_dir", initialDir)
 	}
-	if cmd == nil {
-		cmd = exec.Command("zenity", "--file-selection", "--directory", "--title=Select Download Destination Folder")
-	}
+
+	cmd := exec.Command("zenity", "--file-selection", "--directory", "--title=Select Download Destination Folder", "--filename="+filepath.Clean(initialDir)+"/")
 	
 	env := os.Environ()
 	hasDisplay := false
@@ -369,12 +394,13 @@ func (s *Server) handleChooseFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.settings.DownloadDir = selected
-	s.db.SetSetting("download_dir", selected)
+	safeSelected := ResolveExistingDir(selected)
+	s.settings.DownloadDir = safeSelected
+	s.db.SetSetting("download_dir", safeSelected)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"cancelled": false,
-		"path":      selected,
+		"path":      safeSelected,
 	})
 }
 
@@ -577,6 +603,7 @@ func (s *Server) handleDownloadStream(w http.ResponseWriter, r *http.Request) {
 	if targetDir == "" {
 		targetDir = s.settings.DownloadDir
 	}
+	targetDir = ResolveExistingDir(targetDir)
 
 	availSpace, errSpace := GetAvailableSpaceForPath(targetDir)
 	if errSpace == nil && availSpace < 20*1024*1024 {
@@ -799,6 +826,7 @@ func (s *Server) handleDownloadStreamBatch(w http.ResponseWriter, r *http.Reques
 	if req.TargetDir != "" {
 		baseDir = req.TargetDir
 	}
+	baseDir = ResolveExistingDir(baseDir)
 
 	availSpace, errSpace := GetAvailableSpaceForPath(baseDir)
 	if errSpace == nil && availSpace < 50*1024*1024 {

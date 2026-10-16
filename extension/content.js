@@ -874,15 +874,31 @@
 
     const seriesName = getAccurateSeriesName();
     let defaultDir = "";
-    if (chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get(["last_target_dir"], (res) => {
-        if (res && res.last_target_dir) {
-          defaultDir = res.last_target_dir;
+    fetch("http://127.0.0.1:6880/api/settings", {
+      headers: { "X-HyperDrain-Token": "hyperdrain_secret_token" }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.download_dir) {
+          defaultDir = data.download_dir;
           const dirEl = document.getElementById("hd-batch-dir-txt");
           if (dirEl) dirEl.textContent = defaultDir;
+          if (chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ last_target_dir: defaultDir });
+          }
+        }
+      })
+      .catch(() => {
+        if (chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(["last_target_dir"], (res) => {
+            if (res && res.last_target_dir) {
+              defaultDir = res.last_target_dir;
+              const dirEl = document.getElementById("hd-batch-dir-txt");
+              if (dirEl) dirEl.textContent = defaultDir;
+            }
+          });
         }
       });
-    }
 
     let selectedQuality = "1080p";
     const availableServices = getAvailableServices();

@@ -311,7 +311,23 @@ async function openDownloadPrompt(url, filename, referer, formatId = "", origin 
     console.warn("Could not trigger Ubuntu native folder picker:", err);
   }
 
-  // Fallback to remembered directory if folder chooser was unavailable or failed
+  // Fallback to validated directory from engine settings
+  if (!chosenDir) {
+    try {
+      const setRes = await fetch(`${CORE_API}/api/settings`, {
+        headers: { "X-HyperDrain-Token": AUTH_TOKEN }
+      });
+      if (setRes.ok) {
+        const setData = await setRes.json();
+        if (setData && setData.download_dir) {
+          chosenDir = setData.download_dir;
+          if (chrome.storage?.local) {
+            chrome.storage.local.set({ last_target_dir: chosenDir });
+          }
+        }
+      }
+    } catch (e) {}
+  }
   if (!chosenDir && chrome.storage?.local) {
     try {
       const stored = await chrome.storage.local.get(["last_target_dir"]);

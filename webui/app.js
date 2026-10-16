@@ -57,6 +57,8 @@ window.switchTab = function(tab) {
       .then(r => r.json())
       .then(tasks => { if (tasks) renderTasks(tasks); })
       .catch(() => {});
+  } else if (tab === "settings") {
+    loadSettings();
   }
 };
 
@@ -759,13 +761,6 @@ if (clearCompletedBtn) {
   });
 }
 
-window.openFolder = async (id) => {
-  await fetch(`${API_BASE}/api/tasks/${id}/open`, {
-    method: "POST",
-    headers: { "X-HyperDrain-Token": AUTH_TOKEN }
-  });
-};
-
 window.extractTask = async (id) => {
   await fetch(`${API_BASE}/api/tasks/${id}/extract`, {
     method: "POST",
@@ -781,7 +776,10 @@ const closeAddBtn = document.getElementById("close-modal-btn");
 const cancelAddBtn = document.getElementById("cancel-modal-btn");
 const startDownloadBtn = document.getElementById("start-download-btn");
 
-openAddBtn.addEventListener("click", () => addModal.classList.add("show"));
+openAddBtn.addEventListener("click", () => {
+  loadSettings();
+  addModal.classList.add("show");
+});
 closeAddBtn.addEventListener("click", () => addModal.classList.remove("show"));
 cancelAddBtn.addEventListener("click", () => addModal.classList.remove("show"));
 

@@ -94,6 +94,7 @@ func (e *DownloadEngine) AddTask(rawURL, customName, targetDir, cookie, referer,
 	if targetDir != "" {
 		baseDir = targetDir
 	}
+	baseDir = ResolveExistingDir(baseDir)
 	targetPath := filepath.Join(baseDir, fileName)
 
 	task := &DownloadTask{
