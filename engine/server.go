@@ -441,15 +441,15 @@ func findExecutable(name string, priorityPaths ...string) string {
 			}
 		}
 	}
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
 	homeDir, _ := os.UserHomeDir()
 	if homeDir != "" {
 		localPath := filepath.Join(homeDir, ".local", "bin", name)
 		if _, err := os.Stat(localPath); err == nil {
 			return localPath
 		}
-	}
-	if p, err := exec.LookPath(name); err == nil {
-		return p
 	}
 	return name
 }
@@ -475,17 +475,18 @@ func getYtDlpPath() string {
 	if bundled != "" {
 		extra = append(extra, filepath.Join(bundled, "yt-dlp"))
 	}
-	extra = append(extra, "/opt/pulsar-music-player/bin/yt-dlp")
 	return findExecutable("yt-dlp", extra...)
 }
 
 func getFfmpegPath() string {
+	if _, err := os.Stat("/usr/bin/ffmpeg"); err == nil {
+		return "/usr/bin/ffmpeg"
+	}
 	bundled := getBundledBinDir()
 	var extra []string
 	if bundled != "" {
 		extra = append(extra, filepath.Join(bundled, "ffmpeg"))
 	}
-	extra = append(extra, "/opt/pulsar-music-player/bin/ffmpeg")
 	return findExecutable("ffmpeg", extra...)
 }
 
@@ -1300,6 +1301,7 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 		if foundEpFile != "" {
 			if fi, err := os.Stat(foundEpFile); err == nil && fi.Size() > 100*1024 {
 				if err := MoveFile(foundEpFile, epFinalPath); err == nil {
+					ensureVideoHasAudio(epFinalPath, streamURL, cleanReferer, cleanOrigin, ep.Cookie, ep.UserAgent)
 					completedEpsCount++
 					log.Printf("[ZIP_BATCH] Successfully completed episode %s (%s)", epNumStr, FormatBytes(fi.Size()))
 				}
@@ -1406,6 +1408,88 @@ func (s *Server) ResumeStreamTask(task *DownloadTask) {
 	s.db.SaveTask(task)
 
 	s.executeStreamDownload(task, task.URL, formatSelector)
+}
+
+func ensureVideoHasAudio(videoPath, streamURL, referer, origin, cookie, userAgent string) bool {
+	if fi, err := os.Stat(videoPath); err != nil || fi.Size() < 50*1024 {
+		return false
+	}
+	ffprobePath := "/usr/bin/ffprobe"
+	if _, err := os.Stat(ffprobePath); err != nil {
+		ffprobePath = findExecutable("ffprobe")
+	}
+	probeCmd := exec.Command(ffprobePath, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", videoPath)
+	probeOut, err := probeCmd.Output()
+	if err == nil && strings.TrimSpace(string(probeOut)) == "audio" {
+		return true
+	}
+
+	log.Printf("[STREAM_AUDIO] Video '%s' has NO audio track! Attempting separate audio recovery from '%s'...", filepath.Base(videoPath), streamURL)
+	ytPath := getYtDlpPath()
+	ffmpegPath := getFfmpegPath()
+
+	tempAudio := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_audio_%d.mp4", time.Now().UnixNano()))
+	defer os.Remove(tempAudio)
+
+	audioArgs := []string{
+		"-f", "bestaudio/ba/aud-English/aud-Japanese/audio",
+		"--no-playlist",
+		"--ffmpeg-location", filepath.Dir(ffmpegPath),
+		"-o", tempAudio,
+		"--no-check-certificates",
+	}
+	if referer != "" {
+		audioArgs = append(audioArgs, "--referer", referer)
+	}
+	if origin != "" {
+		audioArgs = append(audioArgs, "--add-header", "Origin: "+origin)
+	}
+	if userAgent != "" {
+		audioArgs = append(audioArgs, "--user-agent", userAgent)
+	}
+	if cookie != "" {
+		audioArgs = append(audioArgs, "--add-header", "Cookie: "+cookie)
+	}
+	audioArgs = append(audioArgs, streamURL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	cmdDl := exec.CommandContext(ctx, ytPath, audioArgs...)
+	if err := cmdDl.Run(); err != nil {
+		log.Printf("[STREAM_AUDIO] Separate audio download failed: %v", err)
+		return false
+	}
+
+	if fi, err := os.Stat(tempAudio); err != nil || fi.Size() < 10*1024 {
+		log.Printf("[STREAM_AUDIO] Downloaded audio is missing or empty")
+		return false
+	}
+
+	tempMerged := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_merged_%d.mp4", time.Now().UnixNano()))
+	defer os.Remove(tempMerged)
+
+	muxCmd := exec.Command(ffmpegPath, "-y",
+		"-i", videoPath,
+		"-i", tempAudio,
+		"-c", "copy",
+		"-map", "0:v:0",
+		"-map", "1:a:0",
+		"-movflags", "+faststart",
+		tempMerged,
+	)
+	if err := muxCmd.Run(); err != nil {
+		log.Printf("[STREAM_AUDIO] Muxing video and audio failed: %v", err)
+		return false
+	}
+
+	if fi, err := os.Stat(tempMerged); err == nil && fi.Size() > 100*1024 {
+		if err := MoveFile(tempMerged, videoPath); err == nil {
+			log.Printf("[STREAM_AUDIO] Successfully injected audio track into '%s'!", filepath.Base(videoPath))
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSelector string) {
@@ -1766,6 +1850,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			if err := MoveFile(completedFile, destFile); err == nil {
 				task.TargetFile = destFile
 				task.Name = cleanEntryName
+				ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
 				if fi, err := os.Stat(destFile); err == nil {
 					task.TotalBytes = fi.Size()
 					task.DownloadedBytes = fi.Size()
@@ -1774,12 +1859,19 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			} else {
 				log.Printf("[STREAM] MoveFile failed: %v, keeping file at %s", err, completedFile)
 				task.TargetFile = completedFile
-				task.TotalBytes = completedSize
-				task.DownloadedBytes = completedSize
+				ensureVideoHasAudio(completedFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
+				if fi, err := os.Stat(completedFile); err == nil {
+					task.TotalBytes = fi.Size()
+					task.DownloadedBytes = fi.Size()
+				} else {
+					task.TotalBytes = completedSize
+					task.DownloadedBytes = completedSize
+				}
 			}
 		} else {
 			task.TargetFile = destFile
 			task.Name = cleanEntryName
+			ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
 			if fi, err := os.Stat(destFile); err == nil {
 				task.TotalBytes = fi.Size()
 				task.DownloadedBytes = fi.Size()

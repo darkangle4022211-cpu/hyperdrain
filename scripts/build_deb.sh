@@ -4,7 +4,7 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-VERSION="${1:-$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.7")}"
+VERSION="${1:-$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.8")}"
 PKG_NAME="hyperdrain_${VERSION}_amd64"
 
 echo "========================================================="
@@ -76,13 +76,16 @@ if [ -f "$YTDLP_BIN" ]; then
     chmod 755 "$PKG_DIR/opt/hyperdrain/bin/yt-dlp"
 fi
 
-# Bundle static ffmpeg
-FFMPEG_BIN="/opt/pulsar-music-player/bin/ffmpeg"
+# Bundle ffmpeg (prioritize working system ffmpeg)
+FFMPEG_BIN="/usr/bin/ffmpeg"
 if [ ! -f "$FFMPEG_BIN" ]; then
     FFMPEG_BIN="$(which ffmpeg 2>/dev/null || true)"
 fi
+if [ ! -f "$FFMPEG_BIN" ]; then
+    FFMPEG_BIN="/opt/pulsar-music-player/bin/ffmpeg"
+fi
 if [ -f "$FFMPEG_BIN" ]; then
-    echo "   • Bundling static ffmpeg..."
+    echo "   • Bundling ffmpeg from $FFMPEG_BIN..."
     cp "$FFMPEG_BIN" "$PKG_DIR/opt/hyperdrain/bin/ffmpeg"
     chmod 755 "$PKG_DIR/opt/hyperdrain/bin/ffmpeg"
 fi
@@ -157,7 +160,7 @@ Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: amd64
-Depends: libnotify4, libasound2 | libasound2t64
+Depends: libnotify4, libasound2 | libasound2t64, ffmpeg
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: HyperDrain <support@hyperdrain.local>
 Description: 32GB High-Speed Resilient Downloader with Universal Extension

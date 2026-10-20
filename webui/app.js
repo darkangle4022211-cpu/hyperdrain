@@ -1121,8 +1121,8 @@ function handleUpdateAvailable(res, autoOpen = false) {
   }
 
   updaterState.availableUpdate = res;
-  const latestVer = 'v' + String(res.latestVersion || '1.0.7').replace(/^v/, '');
-  const currentVer = 'v' + String(res.currentVersion || '1.0.7').replace(/^v/, '');
+  const latestVer = 'v' + String(res.latestVersion || '1.0.8').replace(/^v/, '');
+  const currentVer = 'v' + String(res.currentVersion || '1.0.8').replace(/^v/, '');
 
   if (btnUpdateAvailable) {
     btnUpdateAvailable.style.display = "inline-flex";
@@ -1180,7 +1180,7 @@ async function triggerCheckForUpdates(manual = false) {
         }
         if (manualUpdateResult) {
           manualUpdateResult.className = "update-result-msg update-result-success";
-          const currentV = (res && res.currentVersion) ? `v${res.currentVersion}` : 'v1.0.7';
+          const currentV = (res && res.currentVersion) ? `v${res.currentVersion}` : 'v1.0.8';
           manualUpdateResult.textContent = `HyperDrain is up to date (${currentV}). No updates available.`;
         }
       } else if (!updaterState.availableUpdate && btnUpdateAvailable && !updaterState.isReadyToInstall) {

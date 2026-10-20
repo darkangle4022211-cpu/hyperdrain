@@ -7,7 +7,7 @@ const tokenFile = path.join(root, '.github_token');
 const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
 const owner = 'darkangle4022211-cpu';
 const repo = 'hyperdrain';
-const tag = process.argv[2] || 'v1.0.7';
+const tag = process.argv[2] || 'v1.0.8';
 const ver = tag.replace(/^v/, '');
 
 function apiReq(method, apiPath, body, headers = {}) {

@@ -103,7 +103,7 @@ const fileList = [
 ];
 
 async function run() {
-  console.log('⚡ Starting GitHub push for HyperDrain v1.0.7...');
+  console.log('⚡ Starting GitHub push for HyperDrain v1.0.8...');
   
   // 1. Get current branch ref
   const refRes = await ghReq('GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
@@ -154,7 +154,7 @@ async function run() {
   console.log('Tree created:', treeSha);
 
   // 4. Create Commit
-  const commitMsg = 'Release HyperDrain v1.0.7 - Smart disk space verification, ghost folder auto-healing, and resilience enhancements';
+  const commitMsg = 'Release HyperDrain v1.0.8 - Automatic multi-audio HLS track recovery & native FFmpeg integration';
   const commitRes = await ghReq('POST', `/repos/${owner}/${repo}/git/commits`, {
     message: commitMsg,
     tree: treeSha,
@@ -171,7 +171,7 @@ async function run() {
   });
   if (updateRefRes.status !== 200) throw new Error('Update ref failed: ' + JSON.stringify(updateRefRes));
 
-  console.log('✅ SUCCESS! Successfully pushed HyperDrain codebase v1.0.7 to GitHub main branch!');
+  console.log('✅ SUCCESS! Successfully pushed HyperDrain codebase v1.0.8 to GitHub main branch!');
   console.log(`Commit URL: https://github.com/${owner}/${repo}/commit/${newCommitSha}`);
 }
 
