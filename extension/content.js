@@ -379,28 +379,6 @@
       color: #00f2fe !important;
       box-shadow: 0 0 10px rgba(0, 242, 254, 0.25) !important;
     }
-    .hd-batch-checkbox-row {
-      display: flex !important;
-      align-items: center !important;
-      gap: 10px !important;
-      background: rgba(0, 242, 254, 0.06) !important;
-      border: 1px solid rgba(0, 242, 254, 0.25) !important;
-      border-radius: 8px !important;
-      padding: 10px 14px !important;
-      cursor: pointer !important;
-    }
-    .hd-batch-checkbox-row input {
-      accent-color: #00f2fe !important;
-      width: 16px !important;
-      height: 16px !important;
-      cursor: pointer !important;
-    }
-    .hd-batch-checkbox-row label {
-      font-size: 12px !important;
-      font-weight: 600 !important;
-      color: #f1f5f9 !important;
-      cursor: pointer !important;
-    }
     .hd-batch-actions {
       display: flex !important;
       justify-content: flex-end !important;
@@ -968,10 +946,6 @@
             </div>
           </div>
 
-          <label class="hd-batch-checkbox-row">
-            <input type="checkbox" id="hd-batch-autozip" />
-            <label for="hd-batch-autozip">📦 Bundle episodes into a single <strong>.zip</strong> archive when complete (optional)</label>
-          </label>
 
           <div class="hd-batch-actions">
             <button type="button" class="hd-batch-btn-cancel" id="hd-batch-cancel-btn">Cancel</button>
@@ -1009,7 +983,6 @@
     const browseBtn = overlay.querySelector("#hd-batch-browse-btn");
     const dirTxt = overlay.querySelector("#hd-batch-dir-txt");
     const titleInput = overlay.querySelector("#hd-batch-title");
-    const autoZipCheckbox = overlay.querySelector("#hd-batch-autozip");
     const qualityPills = overlay.querySelectorAll("#hd-batch-quality-pills .hd-batch-pill");
     const serverPills = overlay.querySelectorAll("#hd-batch-server-pills .hd-batch-pill");
 
@@ -1123,7 +1096,7 @@
       }
 
       const finalTitle = titleInput.value.trim() || seriesName;
-      const autoZip = (selectedEps.length > 1) && Boolean(autoZipCheckbox && autoZipCheckbox.checked);
+      const autoZip = true;
 
       let finalAudioType = selectedServer;
 
@@ -1235,10 +1208,8 @@
           try {
             chrome.runtime.sendMessage({
               action: "show_notification",
-              title: autoZip ? "HyperDrain ⚡ ZIP Batch Download Started" : "HyperDrain ⚡ Download Started",
-              message: autoZip
-                ? `Downloading ${finalTitle} in an accelerated ZIP archive.`
-                : `Downloading ${finalTitle} directly to HyperDrain Desktop App.`
+              title: "HyperDrain ⚡ Batch Download Started",
+              message: `Downloading ${finalTitle} directly to HyperDrain Desktop App.`
             });
           } catch(e) {}
         } else {

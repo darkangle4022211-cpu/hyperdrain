@@ -154,7 +154,7 @@ async function run() {
   console.log('Tree created:', treeSha);
 
   // 4. Create Commit
-  const commitMsg = 'Release HyperDrain v1.0.8 - Automatic multi-audio HLS track recovery & native FFmpeg integration';
+  const commitMsg = 'Extension: remove redundant auto-zip bundle episodes checkbox from batch modal';
   const commitRes = await ghReq('POST', `/repos/${owner}/${repo}/git/commits`, {
     message: commitMsg,
     tree: treeSha,
