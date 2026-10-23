@@ -4,20 +4,34 @@ const AUTH_TOKEN = "hyperdrain_secret_token";
 const DESKTOP_APP_STATUS_URL = "http://127.0.0.1:6882/status";
 const DESKTOP_NOTIFY_URL = "http://127.0.0.1:6882/notify-download";
 
-let isDesktopOnline = false;
+let isDesktopOnline = true;
 
-// Lightweight status check: verifies Electron app is active on port 6882
+// Resilient status check: verifies Electron app on port 6882 or core engine on port 6880
 async function checkDesktopStatus() {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 400);
-    const res = await fetch(DESKTOP_APP_STATUS_URL, { signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    let online = false;
+
+    // 1. Check Electron mini server (Port 6882)
+    try {
+      const res = await fetch(DESKTOP_APP_STATUS_URL, { signal: controller.signal });
+      if (res && res.ok) online = true;
+    } catch (_) {}
+
+    // 2. Fallback to Core Go Engine (Port 6880)
+    if (!online) {
+      try {
+        const res2 = await fetch(`${CORE_API}/api/settings`, { signal: controller.signal });
+        if (res2 && res2.ok) online = true;
+      } catch (_) {}
+    }
+
     clearTimeout(timeout);
-    isDesktopOnline = res.ok;
+    isDesktopOnline = online;
     return isDesktopOnline;
   } catch (e) {
-    isDesktopOnline = false;
-    return false;
+    return isDesktopOnline;
   }
 }
 

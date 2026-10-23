@@ -730,33 +730,43 @@
     return result;
   }
 
-  let isEngineOnline = false;
+  let isEngineOnline = true;
+  let consecutiveOfflineCount = 0;
 
   // Verify Electron desktop app is active before displaying download badges
   function refreshEngineStatus(callback) {
     try {
       if (!chrome.runtime?.sendMessage) {
-        isEngineOnline = false;
-        if (callback) callback(false);
+        if (callback) callback(isEngineOnline);
         return;
       }
       chrome.runtime.sendMessage({ action: "check_engine_status" }, (res) => {
         if (chrome.runtime.lastError || !res) {
-          isEngineOnline = false;
+          consecutiveOfflineCount++;
+        } else if (res.online) {
+          consecutiveOfflineCount = 0;
+          isEngineOnline = true;
         } else {
-          isEngineOnline = Boolean(res.online);
+          consecutiveOfflineCount++;
         }
-        if (!isEngineOnline) {
-          // Instantly purge video panels & batch buttons from page if app is quit
+
+        // Only purge UI after 3 confirmed offline checks (~6 seconds)
+        if (consecutiveOfflineCount >= 3) {
+          isEngineOnline = false;
           document.querySelectorAll(".hd-video-panel").forEach((p) => p.remove());
           document.querySelectorAll(".hd-has-panel").forEach((el) => el.classList.remove("hd-has-panel"));
           document.querySelectorAll(".hd-batch-btn").forEach((b) => b.remove());
+          document.querySelectorAll(".hd-hide-ep-input").forEach((inp) => {
+            inp.classList.remove("hd-hide-ep-input");
+            inp.style.removeProperty("display");
+          });
+        } else {
+          isEngineOnline = true;
         }
         if (callback) callback(isEngineOnline);
       });
     } catch (e) {
-      isEngineOnline = false;
-      if (callback) callback(false);
+      if (callback) callback(isEngineOnline);
     }
   }
 
