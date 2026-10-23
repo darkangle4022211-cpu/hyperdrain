@@ -473,19 +473,42 @@ function renderTasks(tasks) {
 
   // 1. Reconcile Active Tasks
   if (activeTasks.length === 0) {
-    if (!activeTasksContainer.querySelector(".empty-hero")) {
-      activeTasksContainer.innerHTML = `
-        <div class="empty-hero">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <h3>No Active Downloads</h3>
-          <p>Drop a link from your browser extension or click 'Add Download' above.</p>
+    let recentSection = "";
+    if (completedTasks.length > 0) {
+      const topRecent = completedTasks.slice(-3).reverse();
+      const recentItemsHtml = topRecent.map(t => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; margin-top: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0;">
+            <span style="color: #10b981; font-size: 13px;">✓</span>
+            <span style="font-size: 12px; font-weight: 600; color: #f1f5f9; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 360px;" title="${t.name}">${t.name}</span>
+          </div>
+          <button class="btn-secondary" style="padding: 4px 10px; font-size: 11px; flex-shrink: 0;" onclick="openFolder('${t.id}')">📂 Open</button>
+        </div>
+      `).join("");
+
+      recentSection = `
+        <div style="margin-top: 20px; width: 100%; max-width: 520px; text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Recent Completed History (${completedTasks.length})</span>
+            <a href="javascript:void(0)" onclick="window.switchTab('completed')" style="font-size: 12px; color: #00f2fe; text-decoration: none; font-weight: 600;">View All ➔</a>
+          </div>
+          ${recentItemsHtml}
         </div>
       `;
     }
+
+    activeTasksContainer.innerHTML = `
+      <div class="empty-hero" style="padding: 26px 20px;">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <h3>No Active Downloads</h3>
+        <p style="color: var(--text-muted); font-size: 13px;">Drop a link from your browser extension or click 'Add Download' above.</p>
+        ${recentSection}
+      </div>
+    `;
   } else {
     const emptyHero = activeTasksContainer.querySelector(".empty-hero");
     if (emptyHero) emptyHero.remove();
