@@ -37,14 +37,18 @@ async function refreshData() {
     statusText.textContent = "Engine Connected";
 
     let totalSpeed = 0;
-    let activeCount = 0;
 
-    if (data && data.length > 0) {
+    // Only display active downloads (exclude completed / old downloads)
+    const activeTasks = (data || []).filter(task => {
+      const s = (task.status || '').toLowerCase();
+      return s === 'downloading' || s === 'paused' || s === 'queued' || s === 'active' || s === 'extracting';
+    });
+
+    if (activeTasks.length > 0) {
       tasksList.innerHTML = "";
-      data.forEach(task => {
+      activeTasks.forEach(task => {
         if (task.status === "downloading") {
           totalSpeed += task.speed || 0;
-          activeCount++;
         }
 
         const pct = task.total_bytes > 0 
@@ -112,11 +116,11 @@ async function refreshData() {
         tasksList.appendChild(el);
       });
     } else {
-      tasksList.innerHTML = `<div class="empty-state">No downloads in progress</div>`;
+      tasksList.innerHTML = `<div class="empty-state">No active downloads</div>`;
     }
 
     speedVal.innerHTML = formatSpeed(totalSpeed);
-    tasksVal.innerHTML = `${activeCount} <small>/ ${data ? data.length : 0}</small>`;
+    tasksVal.innerHTML = `${activeTasks.length}`;
   } catch (e) {
     statusPill.className = "status-pill offline";
     statusText.textContent = "Core Offline";
