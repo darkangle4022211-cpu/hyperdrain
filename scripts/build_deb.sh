@@ -109,8 +109,25 @@ Icon=hyperdrain
 StartupWMClass=hyperdrain
 Categories=Network;FileTransfer;AudioVideo;
 Keywords=download;downloader;video;series;m3u8;hls;fallocate;
+MimeType=x-scheme-handler/hyperdrain;
 EOF
 chmod 644 "$PKG_DIR/usr/share/applications/hyperdrain.desktop"
+
+# Create IDM-style autostart entry in /etc/xdg/autostart/
+mkdir -p "$PKG_DIR/etc/xdg/autostart"
+cat << 'EOF' > "$PKG_DIR/etc/xdg/autostart/hyperdrain.desktop"
+[Desktop Entry]
+Type=Application
+Name=HyperDrain (Background System Tray)
+Comment=HyperDrain Background System Tray Downloader
+Exec=/usr/bin/hyperdrain --hidden
+Icon=hyperdrain
+Terminal=false
+Categories=Network;FileTransfer;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+EOF
+chmod 644 "$PKG_DIR/etc/xdg/autostart/hyperdrain.desktop"
 
 # Post-installation hook
 cat << 'EOF' > "$PKG_DIR/DEBIAN/postinst"
@@ -121,6 +138,11 @@ if [ "$1" = "configure" ]; then
     for udir in /home/*; do
         if [ -d "$udir/.local/share/applications" ]; then
             rm -f "$udir/.local/share/applications/HyperDrain.desktop" 2>/dev/null || true
+        fi
+        if [ -d "$udir" ]; then
+            mkdir -p "$udir/.config/autostart" 2>/dev/null || true
+            cp -f /etc/xdg/autostart/hyperdrain.desktop "$udir/.config/autostart/hyperdrain.desktop" 2>/dev/null || true
+            chown $(stat -c '%u:%g' "$udir") "$udir/.config/autostart/hyperdrain.desktop" 2>/dev/null || true
         fi
     done
     if which update-desktop-database >/dev/null 2>&1; then

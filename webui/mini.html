@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HyperDrain Download</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    :root {
+      --bg: #070a13;
+      --card-bg: #0b1120;
+      --border: rgba(0, 242, 254, 0.2);
+      --border-glow: rgba(0, 242, 254, 0.4);
+      --cyan: #00f2fe;
+      --blue: #3b82f6;
+      --green: #10b981;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+      overflow: hidden;
+      width: 480px;
+      height: 250px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 24px rgba(0, 242, 254, 0.15);
+    }
+
+    /* IDM-Style Draggable Titlebar */
+    .mini-titlebar {
+      height: 38px;
+      background: linear-gradient(90deg, #0d1527, #070a13);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      -webkit-app-region: drag;
+    }
+    .mini-titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+    .mini-bolt {
+      color: var(--cyan);
+      font-size: 15px;
+      filter: drop-shadow(0 0 6px rgba(0, 242, 254, 0.6));
+    }
+    .mini-title-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 330px;
+    }
+    .mini-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      -webkit-app-region: no-drag;
+    }
+    .mini-win-btn {
+      width: 26px;
+      height: 26px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      transition: all 0.15s ease;
+    }
+    .mini-win-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+    .mini-win-btn.close:hover {
+      background: #dc2626;
+      color: #fff;
+    }
+
+    /* Main Progress Container */
+    .mini-content {
+      flex: 1;
+      padding: 14px 16px 12px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Top Stats Row */
+    .mini-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .mini-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(0, 242, 254, 0.1);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+    }
+    .mini-status-badge.paused {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--yellow);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .mini-status-badge.completed {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--green);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .mini-status-badge.error {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--red);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .mini-speed-eta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .mini-speed {
+      color: #38bdf8;
+      font-weight: 700;
+    }
+    .mini-eta {
+      color: var(--text-muted);
+    }
+
+    /* Progress Bar */
+    .mini-progress-container {
+      margin: 8px 0;
+    }
+    .mini-progress-track {
+      width: 100%;
+      height: 12px;
+      background: #0e172a;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+    .mini-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #00f2fe);
+      border-radius: 8px;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
+    }
+    .mini-progress-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .mini-percent {
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    /* Action Buttons Row */
+    .mini-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      -webkit-app-region: no-drag;
+    }
+    .mini-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mini-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mini-btn-primary {
+      background: linear-gradient(135deg, #00f2fe 0%, #3b82f6 100%);
+      color: #070a13;
+      box-shadow: 0 2px 10px rgba(0, 242, 254, 0.3);
+    }
+    .mini-btn-primary:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .mini-btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .mini-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .mini-btn-danger {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .mini-btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #fff;
+    }
+    .mini-pulse {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Frameless IDM Draggable Header -->
+  <div class="mini-titlebar">
+    <div class="mini-titlebar-left">
+      <span class="mini-bolt">⚡</span>
+      <span class="mini-title-text" id="mini-title">Connecting to HyperDrain...</span>
+    </div>
+    <div class="mini-controls">
+      <button class="mini-win-btn" id="btn-minimize" title="Minimize">_</button>
+      <button class="mini-win-btn close" id="btn-close" title="Close window (download continues in background)">&times;</button>
+    </div>
+  </div>
+
+  <!-- Main Body Content -->
+  <div class="mini-content">
+    <div class="mini-meta-row">
+      <div class="mini-status-badge" id="mini-status-badge">
+        <span class="mini-pulse"></span>
+        <span id="mini-status-text">INITIALIZING</span>
+      </div>
+      <div class="mini-speed-eta">
+        <span class="mini-speed" id="mini-speed">0.0 MB/s</span>
+        <span class="mini-eta" id="mini-eta">Calculating ETA...</span>
+      </div>
+    </div>
+
+    <div class="mini-progress-container">
+      <div class="mini-progress-track">
+        <div class="mini-progress-fill" id="mini-fill"></div>
+      </div>
+      <div class="mini-progress-labels">
+        <span id="mini-transferred">0 B of 0 B</span>
+        <span class="mini-percent" id="mini-percent">0.0%</span>
+      </div>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="mini-actions">
+      <div class="mini-btn-group">
+        <button class="mini-btn mini-btn-secondary" id="btn-pause-resume">Pause</button>
+        <button class="mini-btn mini-btn-danger" id="btn-cancel">Cancel</button>
+      </div>
+      <div class="mini-btn-group">
+        <button class="mini-btn mini-btn-primary" id="btn-open-folder" style="display: none;">Open Folder</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CORE_API = "http://127.0.0.1:6880";
+    const AUTH_TOKEN = "hyperdrain_secret_token";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get("taskId");
+
+    const titleEl = document.getElementById("mini-title");
+    const statusBadge = document.getElementById("mini-status-badge");
+    const statusText = document.getElementById("mini-status-text");
+    const speedEl = document.getElementById("mini-speed");
+    const etaEl = document.getElementById("mini-eta");
+    const fillEl = document.getElementById("mini-fill");
+    const transferredEl = document.getElementById("mini-transferred");
+    const percentEl = document.getElementById("mini-percent");
+    const btnPauseResume = document.getElementById("btn-pause-resume");
+    const btnCancel = document.getElementById("btn-cancel");
+    const btnOpenFolder = document.getElementById("btn-open-folder");
+    const btnMinimize = document.getElementById("btn-minimize");
+    const btnClose = document.getElementById("btn-close");
+
+    let currentTask = null;
+    let ws = null;
+
+    // Window controls via Electron preload IPC
+    btnMinimize.addEventListener("click", () => {
+      if (window.electronAPI && window.electronAPI.minimizeWindow) {
+        window.electronAPI.minimizeWindow();
+      }
+    });
+
+    // Refinement 3: Close button simply closes the mini-window; task continues in background
+    btnClose.addEventListener("click", () => {
+      if (window.electronAPI && window.electronAPI.closeWindow) {
+        window.electronAPI.closeWindow();
+      } else {
+        window.close();
+      }
+    });
+
+    // Format Helpers
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return (bytes / Math.pow(1024, i)).toFixed(i > 1 ? 2 : 0) + " " + units[i];
+    }
+
+    function formatSpeed(bytesPerSec) {
+      if (!bytesPerSec || bytesPerSec <= 0) return "0.0 MB/s";
+      return formatBytes(bytesPerSec) + "/s";
+    }
+
+    function formatETA(seconds) {
+      if (!seconds || seconds <= 0 || !isFinite(seconds)) return "--:--";
+      if (seconds > 86400) return "> 1 day";
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      if (h > 0) {
+        return `${h}h ${m.toString().padStart(2, "0")}m`;
+      }
+      return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    }
+
+    // Render task state into mini-window DOM
+    function renderTask(task) {
+      if (!task) return;
+      currentTask = task;
+
+      titleEl.textContent = task.name || "Media File";
+      titleEl.title = task.name || "";
+
+      const pct = Math.max(0, Math.min(100, task.progress || 0));
+      fillEl.style.width = pct.toFixed(1) + "%";
+      percentEl.textContent = pct.toFixed(1) + "%";
+
+      const downloaded = task.downloaded_bytes || 0;
+      const total = task.total_bytes || 0;
+      if (total > 0) {
+        transferredEl.textContent = `${formatBytes(downloaded)} of ${formatBytes(total)}`;
+      } else if (downloaded > 0) {
+        transferredEl.textContent = `${formatBytes(downloaded)} (Streaming)`;
+      } else {
+        transferredEl.textContent = "Connecting stream...";
+      }
+
+      speedEl.textContent = formatSpeed(task.speed || 0);
+
+      const status = (task.status || "").toLowerCase();
+      statusBadge.className = "mini-status-badge " + status;
+
+      if (status === "downloading") {
+        statusText.textContent = "DOWNLOADING";
+        etaEl.textContent = "ETA: " + formatETA(task.eta_seconds);
+        btnPauseResume.textContent = "Pause";
+        btnPauseResume.style.display = "inline-flex";
+        btnOpenFolder.style.display = "none";
+      } else if (status === "paused") {
+        statusText.textContent = "PAUSED";
+        speedEl.textContent = "0.0 MB/s";
+        etaEl.textContent = "Paused";
+        btnPauseResume.textContent = "Resume";
+        btnPauseResume.style.display = "inline-flex";
+        btnOpenFolder.style.display = "none";
+      } else if (status === "completed" || status === "extracted") {
+        statusText.textContent = "COMPLETED 🎉";
+        speedEl.textContent = "Finished";
+        etaEl.textContent = "";
+        fillEl.style.width = "100%";
+        percentEl.textContent = "100%";
+        btnPauseResume.style.display = "none";
+        btnCancel.style.display = "none";
+        btnOpenFolder.style.display = "inline-flex";
+      } else if (status === "error") {
+        statusText.textContent = "ERROR";
+        speedEl.textContent = "Failed";
+        etaEl.textContent = task.error_message || "Download interrupted";
+        btnPauseResume.style.display = "none";
+      } else {
+        statusText.textContent = status.toUpperCase() || "ACTIVE";
+      }
+    }
+
+    // Connect to Core Engine WebSocket
+    function connectWebSocket() {
+      try {
+        ws = new WebSocket("ws://127.0.0.1:6880/ws");
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.tasks && taskId) {
+              const matched = data.tasks.find((t) => t.id === taskId);
+              if (matched) {
+                renderTask(matched);
+              }
+            }
+          } catch (e) {
+            console.error("Telemetry parse error:", e);
+          }
+        };
+
+        ws.onclose = () => {
+          setTimeout(connectWebSocket, 1500);
+        };
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
+      } catch (e) {
+        setTimeout(connectWebSocket, 1500);
+      }
+    }
+
+    // Initial HTTP Fetch so the UI is populated immediately
+    async function fetchInitialTask() {
+      if (!taskId) return;
+      try {
+        const res = await fetch(`${CORE_API}/api/tasks`);
+        if (res.ok) {
+          const tasks = await res.json();
+          const matched = tasks.find((t) => t.id === taskId);
+          if (matched) {
+            renderTask(matched);
+          }
+        }
+      } catch (e) {
+        console.warn("Initial task fetch error:", e);
+      }
+    }
+
+    // Button: Pause / Resume
+    btnPauseResume.addEventListener("click", async () => {
+      if (!currentTask || !currentTask.id) return;
+      const isPaused = currentTask.status === "paused";
+      const action = isPaused ? "resume" : "pause";
+      try {
+        await fetch(`${CORE_API}/api/tasks/${currentTask.id}/${action}`, {
+          method: "POST",
+          headers: { "X-HyperDrain-Token": AUTH_TOKEN }
+        });
+      } catch (e) {
+        console.error(`Failed to ${action} task:`, e);
+      }
+    });
+
+    // Refinement 3: Cancel stops the task via Go core and closes window
+    btnCancel.addEventListener("click", async () => {
+      if (!currentTask || !currentTask.id) {
+        if (window.electronAPI && window.electronAPI.closeWindow) window.electronAPI.closeWindow();
+        return;
+      }
+      try {
+        await fetch(`${CORE_API}/api/tasks/${currentTask.id}/delete`, {
+          method: "POST",
+          headers: { "X-HyperDrain-Token": AUTH_TOKEN }
+        });
+      } catch (e) {
+        console.error("Failed to delete task:", e);
+      }
+      if (window.electronAPI && window.electronAPI.closeWindow) {
+        window.electronAPI.closeWindow();
+      } else {
+        window.close();
+      }
+    });
+
+    // Button: Open Folder when finished
+    btnOpenFolder.addEventListener("click", () => {
+      if (!currentTask) return;
+      const target = currentTask.file_path || currentTask.target_dir;
+      if (window.electronAPI && window.electronAPI.showItemInFolder && target) {
+        window.electronAPI.showItemInFolder(target);
+      } else if (window.electronAPI && window.electronAPI.openPath && currentTask.target_dir) {
+        window.electronAPI.openPath(currentTask.target_dir);
+      }
+    });
+
+    // Kickoff
+    fetchInitialTask();
+    connectWebSocket();
+  </script>
+</body>
+</html>

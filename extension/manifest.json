@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HyperDrain - 32GB High-Speed Downloader",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Multi-threaded high-speed downloader for large media, web series archives, and movies with zero web hosting.",
   "permissions": [
     "downloads",

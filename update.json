@@ -1,25 +1,25 @@
 {
   "name": "hyperdrain",
   "repo": "darkangle4022211-cpu/hyperdrain",
-  "version": "1.0.8",
-  "tag": "v1.0.8",
-  "changelog": "• Automatic Multi-Audio HLS Track Recovery: Automatically detects and recovers separate audio streams (e.g. English/Japanese dubs) for HLS and DASH master playlists, preventing silent video downloads\n• Native System FFmpeg Integration: Prioritizes system /usr/bin/ffmpeg, completely eliminating SIGSEGV crash errors during audio extraction and stream muxing\n• Smart Pre-flight Disk Space Verification: Checks target drive storage before starting and alerts user if disk space is insufficient\n• Ghost Directory Auto-Healing: Automatically falls back to closest existing ancestor directory if target or recent download folder was deleted\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
+  "version": "1.0.9",
+  "tag": "v1.0.9",
+  "changelog": "• IDM-Style Lightweight Mini-Window: Frameless, always-on-top 480x250 download progress popup with real-time download speed, percentage, ETA countdown, pause/resume/cancel controls, and instant folder navigation upon completion.\n• Silent Background System Tray Mode: Closing the main window cleanly hides it to the Linux system tray without taskbar clutter while keeping high-speed engine downloads active.\n• Zero-Touch Auto-Start Integration: Automatically registers on system boot/login and deep-link protocol (hyperdrain://wake) so you never have to manually open the application in the background to start downloading from your browser.\n• Online Auto-Update & Uninterrupted High-Speed Core: Zero changes to the underlying Go download engine, preserving maximum 32-stream throughput, fallocate preallocation, and multi-track audio recovery.\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
   "support": {
     "message": "If you're facing a problem, feel free to contact the developer:",
     "email": "hamza.zafar4022211@gmail.com"
   },
   "platforms": {
     "linux-deb-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.8/hyperdrain_1.0.8_amd64.deb",
-      "sha256": "785ec8e1439d7370e517a8fc3ad185bae621f699f28809d76c3fb8002c697acb",
-      "size": 132994386,
-      "filename": "hyperdrain_1.0.8_amd64.deb"
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb",
+      "sha256": "4db1411c59785c134f032a5d2b3c39f0f4f382c0963868b437854119a0ea164d",
+      "size": 133004042,
+      "filename": "hyperdrain_1.0.9_amd64.deb"
     },
     "windows-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.8/HyperDrain-Setup-1.0.8.exe",
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/HyperDrain-Setup-1.0.9.exe",
       "sha256": "",
       "size": 0,
-      "filename": "HyperDrain-Setup-1.0.8.exe"
+      "filename": "HyperDrain-Setup-1.0.9.exe"
     }
   }
 }

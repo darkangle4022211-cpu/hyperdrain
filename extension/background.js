@@ -1,6 +1,29 @@
 // HyperDrain Universal MV3 Background Service Worker
 const CORE_API = "http://127.0.0.1:6880";
 const AUTH_TOKEN = "hyperdrain_secret_token";
+const DESKTOP_APP_STATUS_URL = "http://127.0.0.1:6882/status";
+const DESKTOP_NOTIFY_URL = "http://127.0.0.1:6882/notify-download";
+
+let isDesktopOnline = false;
+
+// Lightweight status check: verifies Electron app is active on port 6882
+async function checkDesktopStatus() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 400);
+    const res = await fetch(DESKTOP_APP_STATUS_URL, { signal: controller.signal });
+    clearTimeout(timeout);
+    isDesktopOnline = res.ok;
+    return isDesktopOnline;
+  } catch (e) {
+    isDesktopOnline = false;
+    return false;
+  }
+}
+
+// Background status polling every 2 seconds
+setInterval(checkDesktopStatus, 2000);
+checkDesktopStatus();
 
 const MEDIA_EXTENSIONS = new Set([
   "zip", "rar", "7z", "tar", "gz", "bz2", "xz",
@@ -442,6 +465,10 @@ async function sendToHyperDrain(url, referer = "", tabId = null, filename = "") 
 
     if (res.ok) {
       const data = await res.json();
+      const taskId = data.id || data.task_id;
+      if (taskId) {
+        fetch(`${DESKTOP_NOTIFY_URL}?taskId=${encodeURIComponent(taskId)}`).catch(() => {});
+      }
       notifyUser("Download Added ⚡", `Routed to HyperDrain: ${data.name || filename || 'Media File'}`);
     } else {
       notifyUser("HyperDrain Error", `Core responded with code: ${res.status}`);
@@ -624,6 +651,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(stats => sendResponse({ online: true, stats }))
       .catch(() => sendResponse({ online: false }));
     return true; // Keep message channel open for async response
+  } else if (request.action === "check_engine_status") {
+    // Check internal status endpoint (Port 6882) to confirm Electron desktop app is alive
+    checkDesktopStatus().then((online) => {
+      sendResponse({ online: online });
+    });
+    return true; // Keep channel open for async response
   } else if (request.action === "report_stream_from_frame") {
     if (sender.tab && sender.tab.id >= 0 && request.url) {
       handleDetected(request.url, sender.tab.id, [], request.referer || "");

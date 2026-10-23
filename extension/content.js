@@ -730,7 +730,38 @@
     return result;
   }
 
+  let isEngineOnline = false;
+
+  // Verify Electron desktop app is active before displaying download badges
+  function refreshEngineStatus(callback) {
+    try {
+      if (!chrome.runtime?.sendMessage) {
+        isEngineOnline = false;
+        if (callback) callback(false);
+        return;
+      }
+      chrome.runtime.sendMessage({ action: "check_engine_status" }, (res) => {
+        if (chrome.runtime.lastError || !res) {
+          isEngineOnline = false;
+        } else {
+          isEngineOnline = Boolean(res.online);
+        }
+        if (!isEngineOnline) {
+          // Instantly purge video panels & batch buttons from page if app is quit
+          document.querySelectorAll(".hd-video-panel").forEach((p) => p.remove());
+          document.querySelectorAll(".hd-has-panel").forEach((el) => el.classList.remove("hd-has-panel"));
+          document.querySelectorAll(".hd-batch-btn").forEach((b) => b.remove());
+        }
+        if (callback) callback(isEngineOnline);
+      });
+    } catch (e) {
+      isEngineOnline = false;
+      if (callback) callback(false);
+    }
+  }
+
   function attachBatchEpisodeButton() {
+    if (!isEngineOnline) return;
     // 1. Safely hide ONLY the glitchy "Number of Ep" input itself (without hiding any parent container)
     const epSearchInputs = document.querySelectorAll(
       'input[placeholder*="Number of Ep" i], input[placeholder="Number of Ep"]'
@@ -1205,6 +1236,11 @@
         if (res.ok) {
           const data = await res.json();
           overlay.remove();
+          const taskId = data.task_id || data.id;
+          if (taskId) {
+            // Trigger IDM-style mini window in Electron desktop app for this batch task
+            fetch(`http://127.0.0.1:6882/notify-download?taskId=${encodeURIComponent(taskId)}&batch=1`).catch(() => {});
+          }
           try {
             chrome.runtime.sendMessage({
               action: "show_notification",
@@ -1256,6 +1292,7 @@
 
   // 3. Video & Player Observer
   function attachVideoPanels() {
+    if (!isEngineOnline) return;
     const rawTargets = [];
     const isYouTube = window.location.hostname.includes("youtube.com");
 
@@ -1590,17 +1627,28 @@
     attachBatchEpisodeButton();
   }
 
-  // Run on load and observe DOM changes
-  attachVideoPanels();
-  attachBatchEpisodeButton();
+  // Run on load and observe DOM changes only when Electron desktop app is active
+  refreshEngineStatus((online) => {
+    if (online) {
+      attachVideoPanels();
+      attachBatchEpisodeButton();
+    }
+  });
+
   setInterval(() => {
-    attachVideoPanels();
-    attachBatchEpisodeButton();
-  }, 1000);
+    refreshEngineStatus((online) => {
+      if (online) {
+        attachVideoPanels();
+        attachBatchEpisodeButton();
+      }
+    });
+  }, 1500);
 
   const observer = new MutationObserver(() => {
-    attachVideoPanels();
-    attachBatchEpisodeButton();
+    if (isEngineOnline) {
+      attachVideoPanels();
+      attachBatchEpisodeButton();
+    }
   });
   observer.observe(document.body || document.documentElement, {
     childList: true,

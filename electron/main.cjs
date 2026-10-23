@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, dialog, shell, session, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, dialog, shell, session, nativeImage, screen } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -25,8 +25,42 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const EXTENSION_DIR = path.join(ROOT_DIR, 'extension');
 const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 const CORE_URL = 'http://127.0.0.1:6880';
+const MINI_IPC_PORT = 6882;
+let miniServer = null;
+const miniWindows = new Map(); // taskId -> BrowserWindow
 const GITHUB_REPO = 'darkangle4022211-cpu/hyperdrain';
-const APP_VERSION = '1.0.8';
+const APP_VERSION = '1.0.9';
+
+// Register IDM-style deep-link scheme
+app.setAsDefaultProtocolClient('hyperdrain');
+
+// IDM-Style Autostart: starts silently in the Linux system tray on login
+function ensureAutostart() {
+  try {
+    const homeDir = os.homedir();
+    if (!homeDir) return;
+    const autostartDir = path.join(homeDir, '.config', 'autostart');
+    const autostartFile = path.join(autostartDir, 'hyperdrain.desktop');
+    if (!fs.existsSync(autostartDir)) {
+      fs.mkdirSync(autostartDir, { recursive: true });
+    }
+    const execCmd = fs.existsSync('/usr/bin/hyperdrain') ? '/usr/bin/hyperdrain --hidden' : `${process.execPath} --hidden`;
+    const content = `[Desktop Entry]
+Type=Application
+Name=HyperDrain
+Comment=32GB High-Speed Resilient Downloader
+Exec=${execCmd}
+Icon=hyperdrain
+Terminal=false
+Categories=Network;FileTransfer;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+`;
+    fs.writeFileSync(autostartFile, content, { mode: 0o644 });
+  } catch (e) {
+    console.warn('[HyperDrain Desktop] Could not ensure autostart:', e);
+  }
+}
 
 function getAppIcon() {
   const iconPaths = [
@@ -160,8 +194,21 @@ function createMainWindow() {
     mainWindow.loadURL(CORE_URL);
   }
 
+  const isHiddenStartup = process.argv.includes('--hidden') ||
+                          process.argv.includes('--minimized') ||
+                          process.argv.includes('--tray') ||
+                          process.argv.includes('--background');
+
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (isHiddenStartup) {
+      mainWindow.hide();
+      if (typeof mainWindow.setSkipTaskbar === 'function') {
+        mainWindow.setSkipTaskbar(true);
+      }
+      console.log('[HyperDrain Desktop] Started silently in background tray mode (IDM style).');
+    } else {
+      mainWindow.show();
+    }
   });
 
   mainWindow.on('maximize', () => {
@@ -174,21 +221,28 @@ function createMainWindow() {
 
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
-      isQuitting = true;
+      e.preventDefault();
+      mainWindow.hide();
+      if (typeof mainWindow.setSkipTaskbar === 'function') {
+        mainWindow.setSkipTaskbar(true);
+      }
+      return;
     }
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
-    if (tray && !tray.isDestroyed()) {
-      try { tray.destroy(); } catch (e) {}
-      tray = null;
+    if (isQuitting) {
+      if (tray && !tray.isDestroyed()) {
+        try { tray.destroy(); } catch (e) {}
+        tray = null;
+      }
+      app.quit();
     }
-    app.quit();
   });
 }
 
-// 4. Setup System Tray
+// 4. Setup System Tray (Silent Background Daemon Mode)
 function setupTray() {
   const iconPath = getAppIcon();
   if (!iconPath) return;
@@ -199,9 +253,10 @@ function setupTray() {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Open HyperDrain Dashboard',
+      label: 'Show HyperDrain Dashboard',
       click: () => {
         if (mainWindow) {
+          mainWindow.setSkipTaskbar(false);
           if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.show();
           mainWindow.focus();
@@ -248,12 +303,170 @@ function setupTray() {
   ]);
 
   tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+        mainWindow.setSkipTaskbar(true);
+      } else {
+        mainWindow.setSkipTaskbar(false);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
   tray.on('double-click', () => {
     if (mainWindow) {
+      mainWindow.setSkipTaskbar(false);
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
     }
+  });
+}
+
+// 4b. IDM-Style Mini Download Progress Window Manager
+function createMiniDownloadWindow(taskId) {
+  if (!taskId) return null;
+
+  // If a mini-window for this task is already open, focus it
+  if (miniWindows.has(taskId)) {
+    const existing = miniWindows.get(taskId);
+    if (existing && !existing.isDestroyed()) {
+      if (existing.isMinimized()) existing.restore();
+      existing.show();
+      existing.focus();
+      return existing;
+    }
+    miniWindows.delete(taskId);
+  }
+
+  // Calculate bottom-right positioning with cascading offset for multiple active tasks
+  let posX = 100;
+  let posY = 100;
+  try {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+    const winWidth = 480;
+    const winHeight = 250;
+    const margin = 24;
+    const index = miniWindows.size;
+    posX = Math.max(20, screenWidth - winWidth - margin - (index * 20));
+    posY = Math.max(20, screenHeight - winHeight - margin - (index * 36));
+  } catch (e) {
+    console.warn('[HyperDrain Desktop] Could not calculate screen coordinates:', e);
+  }
+
+  const iconPath = getAppIcon();
+  const miniWin = new BrowserWindow({
+    width: 480,
+    height: 250,
+    x: posX,
+    y: posY,
+    resizable: false,
+    frame: false,
+    alwaysOnTop: true,
+    backgroundColor: '#070a13',
+    show: false,
+    icon: iconPath || undefined,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    }
+  });
+
+  const miniUi = path.join(ROOT_DIR, 'webui', 'mini.html');
+  if (fs.existsSync(miniUi)) {
+    miniWin.loadFile(miniUi, { search: `?taskId=${encodeURIComponent(taskId)}` });
+  } else {
+    miniWin.loadURL(`${CORE_URL}/mini.html?taskId=${encodeURIComponent(taskId)}`);
+  }
+
+  miniWin.once('ready-to-show', () => {
+    miniWin.show();
+    miniWin.focus();
+  });
+
+  miniWin.on('closed', () => {
+    miniWindows.delete(taskId);
+  });
+
+  miniWindows.set(taskId, miniWin);
+  return miniWin;
+}
+
+// 4c. Lightweight Internal Status & Mini Window Notification Server
+function startMiniServer() {
+  if (miniServer) return;
+
+  miniServer = http.createServer((req, res) => {
+    // 1. Full CORS Headers for browser extension and WebUI
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-HyperDrain-Token, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    try {
+      const u = new URL(req.url, `http://127.0.0.1:${MINI_IPC_PORT}`);
+
+      // Status endpoint: validates that the Electron desktop app is running
+      if (u.pathname === '/status' || u.pathname === '/api/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          online: true,
+          version: APP_VERSION,
+          electron: true,
+          tray_mode: true
+        }));
+        return;
+      }
+
+      // Notification endpoint: spawns the IDM mini-window for a given taskId
+      if (u.pathname === '/notify-download') {
+        const taskId = u.searchParams.get('taskId');
+        if (taskId) {
+          createMiniDownloadWindow(taskId);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, taskId: taskId }));
+        return;
+      }
+
+      // Helper endpoint: brings main dashboard forward if requested
+      if (u.pathname === '/show-dashboard') {
+        if (mainWindow) {
+          mainWindow.setSkipTaskbar(false);
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Endpoint not found' }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+
+  miniServer.on('error', (err) => {
+    console.warn(`[HyperDrain Desktop] Mini notification server error on port ${MINI_IPC_PORT}:`, err.message);
+  });
+
+  miniServer.listen(MINI_IPC_PORT, '127.0.0.1', () => {
+    console.log(`[HyperDrain Desktop] Mini notification server active on http://127.0.0.1:${MINI_IPC_PORT}`);
   });
 }
 
@@ -605,12 +818,24 @@ async function downloadFileWithProgress(url, destPath, onProgress) {
 
 // 6. IPC Handlers
 function setupIPCHandlers() {
-  ipcMain.on('window-minimize', () => {
-    if (mainWindow) mainWindow.minimize();
+  ipcMain.on('window-minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      win.minimize();
+    } else if (mainWindow) {
+      mainWindow.minimize();
+    }
   });
 
-  ipcMain.on('window-maximize', () => {
-    if (mainWindow) {
+  ipcMain.on('window-maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    } else if (mainWindow) {
       if (mainWindow.isMaximized()) {
         mainWindow.unmaximize();
       } else {
@@ -619,12 +844,28 @@ function setupIPCHandlers() {
     }
   });
 
-  ipcMain.on('window-close', () => {
-    if (mainWindow) mainWindow.close();
+  ipcMain.on('window-close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win === mainWindow) {
+      if (mainWindow) {
+        mainWindow.hide();
+        if (typeof mainWindow.setSkipTaskbar === 'function') {
+          mainWindow.setSkipTaskbar(true);
+        }
+      }
+    } else if (win) {
+      win.close();
+    } else if (mainWindow) {
+      mainWindow.hide();
+      if (typeof mainWindow.setSkipTaskbar === 'function') {
+        mainWindow.setSkipTaskbar(true);
+      }
+    }
   });
 
-  ipcMain.handle('window-is-maximized', () => {
-    return mainWindow ? mainWindow.isMaximized() : false;
+  ipcMain.handle('window-is-maximized', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    return win ? win.isMaximized() : false;
   });
 
   function resolveExistingDir(targetPath) {
@@ -900,8 +1141,14 @@ rm -f "${debPath}" "${scriptPath}" 2>/dev/null
 }
 
 // App lifecycle
-app.on('second-instance', () => {
+app.on('second-instance', (event, commandLine) => {
+  const urlArg = (commandLine || []).find(arg => typeof arg === 'string' && arg.startsWith('hyperdrain://'));
+  if (urlArg && urlArg.includes('wake')) {
+    console.log('[HyperDrain Desktop] Woken up in background via hyperdrain://wake');
+    return;
+  }
   if (mainWindow) {
+    mainWindow.setSkipTaskbar(false);
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
@@ -912,10 +1159,12 @@ app.whenReady().then(async () => {
   // 1. Start Go Engine
   await ensureEngineRunning();
 
-  // 2. Setup IPC, UI Window, and System Tray
+  // 2. Setup IPC, UI Window, System Tray & Mini Notification Server
   setupIPCHandlers();
   createMainWindow();
   setupTray();
+  startMiniServer();
+  ensureAutostart();
 
   // 3. Quiet Background Update Check (3 seconds after startup)
   setTimeout(async () => {
@@ -929,13 +1178,21 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (isQuitting) {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  if (miniServer) {
+    try { miniServer.close(); } catch (e) {}
+    miniServer = null;
+  }
+  for (const win of miniWindows.values()) {
+    try { win.destroy(); } catch (e) {}
+  }
+  miniWindows.clear();
   if (engineProcess && spawnedEngine) {
     console.log('[HyperDrain Desktop] Gracefully terminating spawned engine...');
     try {

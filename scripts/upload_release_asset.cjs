@@ -94,7 +94,7 @@ async function run() {
       tag_name: tag,
       target_commitish: 'main',
       name: `${tag} - Production Release`,
-      body: `### HyperDrain ${tag}\n\n• Smart Pre-flight Disk Space Verification: Checks available space on target drive before starting download; prevents starting if space is insufficient and alerts the user with exact required vs available storage.\n• UI & Desktop Notification Alerts: Clear visual warning badges and error notifications for storage limits.\n• Resilient Multi-Threaded Engine: High-speed download optimizations with 6-worker chunking and SQLite WAL state journaling.`,
+      body: `### HyperDrain ${tag}\n\n• **IDM-Style Lightweight Mini-Window**: Frameless, always-on-top 480x250 download progress popup with real-time download speed, percentage, ETA countdown, pause/resume/cancel controls, and instant folder navigation upon completion.\n• **Silent Background System Tray Mode**: Closing the main window cleanly hides it to the Linux system tray without taskbar clutter while keeping high-speed engine downloads active.\n• **Zero-Touch Auto-Start Integration**: Automatically registers on system boot/login and deep-link protocol (\`hyperdrain://wake\`) so you never have to manually open the application in the background to start downloading from your browser.\n• **Online Auto-Update & Uninterrupted High-Speed Core**: Zero changes to the underlying Go download engine, preserving maximum 32-stream throughput, \`fallocate\` preallocation, and multi-track audio recovery.`,
       draft: false,
       prerelease: false
     });

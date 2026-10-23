@@ -322,6 +322,12 @@ downloadBtn.addEventListener("click", async () => {
     });
 
     if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const taskId = data.task_id || data.id;
+      if (taskId) {
+        // Trigger IDM-style mini window in Electron desktop app
+        fetch(`http://127.0.0.1:6882/notify-download?taskId=${encodeURIComponent(taskId)}`).catch(() => {});
+      }
       if (chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           action: "show_notification",
