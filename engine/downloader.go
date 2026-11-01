@@ -647,9 +647,10 @@ func (e *DownloadEngine) downloadSegment(ctx context.Context, task *DownloadTask
 				currentOffset += int64(n)
 				seg.Downloaded += int64(n)
 
-				task.mu.Lock()
-				task.LastProgressTime = time.Now()
-				task.mu.Unlock()
+				if task.mu.TryLock() {
+					task.LastProgressTime = time.Now()
+					task.mu.Unlock()
+				}
 
 				atomic.AddInt64(&e.bytesDownloaded, int64(n))
 				backoff = 1 * time.Second // Reset backoff on successful data stream

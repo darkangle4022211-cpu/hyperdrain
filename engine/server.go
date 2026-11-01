@@ -176,6 +176,42 @@ type AddTaskRequest struct {
 	UserAgent     string `json:"user_agent"`
 }
 
+func isStreamOrVideoURL(rawURL string) bool {
+	lower := strings.ToLower(rawURL)
+	if strings.Contains(lower, "youtube.com") || strings.Contains(lower, "youtu.be") ||
+		strings.Contains(lower, "googlevideo.com") || strings.Contains(lower, "vimeo.com") ||
+		strings.Contains(lower, "dailymotion.com") || strings.Contains(lower, "twitch.tv") ||
+		strings.Contains(lower, "tiktok.com") || strings.Contains(lower, "instagram.com") ||
+		strings.Contains(lower, "twitter.com") || strings.Contains(lower, "x.com") ||
+		strings.Contains(lower, "facebook.com") || strings.Contains(lower, "fb.watch") ||
+		strings.Contains(lower, "rumble.com") || strings.Contains(lower, "bilibili.com") ||
+		strings.Contains(lower, ".m3u8") || strings.Contains(lower, ".mpd") ||
+		strings.Contains(lower, "m3u8") || strings.Contains(lower, "manifest") ||
+		strings.Contains(lower, "/hls/") || strings.Contains(lower, "/dash/") ||
+		strings.Contains(lower, "format=m3u8") || strings.Contains(lower, "type=m3u8") {
+		return true
+	}
+	return false
+}
+
+func recoverPlaylistURL(streamURL string) string {
+	reSeg := regexp.MustCompile(`/(?:seg_[^/?#]+|segment[^/?#]*|index[^/?#]*)\.ts`)
+	if reSeg.MatchString(streamURL) {
+		streamURL = reSeg.ReplaceAllString(streamURL, "/index.m3u8")
+	}
+
+	reFrag := regexp.MustCompile(`/(?:init|seg|segment|chunk|frag|main|index|track|stream|media|video|audio)[^/?#]*\.(mp4|m4s)`)
+	if loc := reFrag.FindStringIndex(streamURL); loc != nil {
+		prefix := streamURL[:loc[0]]
+		if strings.HasSuffix(prefix, ".mp4") || strings.HasSuffix(prefix, ".m4s") {
+			streamURL = prefix + ".m3u8"
+		} else {
+			streamURL = prefix + "/index.m3u8"
+		}
+	}
+	return streamURL
+}
+
 func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -206,6 +242,77 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 	availSpace, errSpace := GetAvailableSpaceForPath(targetDir)
 	if errSpace == nil && availSpace < 20*1024*1024 {
 		http.Error(w, fmt.Sprintf("Target disk does not have enough space: only %s available", FormatBytes(int64(availSpace))), http.StatusBadRequest)
+		return
+	}
+
+	// If URL is a video platform or stream (e.g. YouTube, Vimeo, m3u8, mpd), route to high-speed stream downloader!
+	if isStreamOrVideoURL(req.URL) {
+		cleanReferer := strings.TrimSpace(req.Referer)
+		cleanOrigin := ""
+		if cleanReferer != "" {
+			if parsed, err := url.Parse(cleanReferer); err == nil && parsed.Path == "" {
+				parsed.Path = "/"
+				cleanReferer = parsed.String()
+			}
+			if parsed, err := url.Parse(cleanReferer); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+				cleanOrigin = parsed.Scheme + "://" + parsed.Host
+			}
+		}
+
+		cleanTitle := strings.TrimSpace(req.SuggestedName)
+		if cleanTitle != "" {
+			cleanTitle = strings.Map(func(r rune) rune {
+				if strings.ContainsRune(`/\:*?"<>|`, r) {
+					return '_'
+				}
+				return r
+			}, cleanTitle)
+			cleanTitle = strings.TrimSuffix(cleanTitle, filepath.Ext(cleanTitle))
+		} else {
+			cleanTitle = fmt.Sprintf("video_%d", time.Now().Unix())
+		}
+
+		ext := "mp4"
+		streamURL := recoverPlaylistURL(req.URL)
+		if strings.Contains(streamURL, "fetch.nexabloom.top") {
+			streamURL = strings.Replace(streamURL, "fetch.nexabloom.top", "ncdn.imgnex.top", 1)
+		}
+
+		formatSelector := "bestvideo+bestaudio/best"
+
+		conns := req.Connections
+		if conns <= 0 {
+			conns = 16
+		}
+
+		taskID := fmt.Sprintf("task_stream_%d", time.Now().UnixNano())
+		task := &DownloadTask{
+			ID:                taskID,
+			URL:               streamURL,
+			Name:              cleanTitle + "." + ext,
+			TargetFile:        filepath.Join(targetDir, cleanTitle+"."+ext),
+			TotalBytes:        0,
+			Status:            StatusDownloading,
+			Connections:       conns,
+			ActiveConnections: conns,
+			CreatedAt:         time.Now(),
+			FormatID:          formatSelector,
+			Origin:            cleanOrigin,
+			Referer:           cleanReferer,
+			UserAgent:         req.UserAgent,
+			Cookie:            req.Cookie,
+			Segments:          make([]*Segment, 0),
+		}
+		s.engine.mu.Lock()
+		s.engine.activeTasks[taskID] = task
+		s.engine.mu.Unlock()
+		s.db.SaveTask(task)
+
+		NotifyDownloadStarted(task.Name, task.ActiveConnections)
+		go s.executeStreamDownload(task, streamURL, formatSelector)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(task)
 		return
 	}
 
