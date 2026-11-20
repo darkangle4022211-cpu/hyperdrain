@@ -1,8 +1,15 @@
 const REPO = "darkangle4022211-cpu/hyperdrain";
 const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
 const REVIEWS_API = `https://api.github.com/repos/${REPO}/issues?labels=review&state=all&per_page=20`;
-const CACHE_KEY = "hyperdrain_releases_cache_v1";
+const CACHE_KEY = "hyperdrain_releases_cache_v2";
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+const SCREEN_CAPTIONS = [
+  "Active Downloads console with 60-second throughput and disk telemetry.",
+  "Universal Browser Extension Hub connecting Chrome, Brave, Edge, and Firefox.",
+  "Search and Discover catalog with category, genre, year, and rating filters.",
+  "Built-in Websites browser view with stream detection and custom shortcuts."
+];
 
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return "";
@@ -16,22 +23,6 @@ function formatDate(iso) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function classifyAsset(name) {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".appimage")) return { priority: 1, label: "AppImage", kind: "Portable Linux AppImage" };
-  if (lower.endsWith(".deb")) return { priority: 2, label: ".deb", kind: "Ubuntu / Debian x64" };
-  if (lower.endsWith(".exe")) return { priority: 3, label: ".exe", kind: "Windows x64" };
-  if (lower.endsWith(".snap")) return { priority: 4, label: ".snap", kind: "Snap Package" };
-  if (lower.endsWith(".zip")) return { priority: 5, label: ".zip", kind: "Portable Archive" };
-  return { priority: 99, label: name, kind: "Release Asset" };
-}
-
-function getInstallableAssets(release) {
-  return (release.assets || [])
-    .filter((a) => !a.name.endsWith(".json") && !a.name.endsWith(".yml"))
-    .sort((a, b) => classifyAsset(a.name).priority - classifyAsset(b.name).priority);
-}
-
 function escapeHtml(text) {
   return String(text || "")
     .replace(/&/g, "&amp;")
@@ -40,140 +31,161 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function formatInlineMarkdown(text) {
-  let safe = escapeHtml(text);
-  safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
-  return safe;
+function classifyAsset(name) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".appimage")) return { priority: 1, label: "AppImage" };
+  if (lower.endsWith(".deb")) return { priority: 2, label: ".deb" };
+  if (lower.endsWith(".exe")) return { priority: 3, label: ".exe" };
+  if (lower.endsWith(".snap")) return { priority: 4, label: ".snap" };
+  if (lower.endsWith(".zip")) return { priority: 5, label: ".zip" };
+  return { priority: 99, label: name };
+}
+
+function getInstallableAssets(release) {
+  return (release.assets || [])
+    .filter((a) => !a.name.endsWith(".json") && !a.name.endsWith(".yml"))
+    .sort((a, b) => classifyAsset(a.name).priority - classifyAsset(b.name).priority);
 }
 
 function parseChangelog(body) {
   if (!body) return ["Production release published on GitHub Releases."];
   const lines = body
     .split(/\r?\n/)
-    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
-    .filter((line) => line && !line.startsWith("#") && !line.startsWith("If you're facing") && !line.startsWith("Email:"));
-  return lines.length ? lines.slice(0, 6) : ["Production release published on GitHub Releases."];
+    .map((line) => line.replace(/^[-*•]\s*/, "").replace(/\*\*/g, "").trim())
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith("If you're facing") && !line.startsWith("Email:"))
+    .map((line) => {
+      const colonIdx = line.indexOf(":");
+      return colonIdx > 8 && colonIdx < 60 ? line.slice(0, colonIdx) : line.slice(0, 88);
+    });
+  return lines.length ? lines.slice(0, 4) : ["Production release published on GitHub Releases."];
 }
 
-function renderReleases(releases, sourceLabel) {
+let allReleasesCache = [];
+let showAllReleases = false;
+
+function renderReleaseTableRows() {
+  const tbody = document.getElementById("releases-table-body");
+  const toggleBtn = document.getElementById("toggle-all-releases-btn");
+  if (!tbody || !allReleasesCache.length) return;
+
+  const visible = showAllReleases ? allReleasesCache : allReleasesCache.slice(0, 5);
+  tbody.innerHTML = visible
+    .map((rel) => {
+      const relAssets = getInstallableAssets(rel);
+      const packagesHtml = relAssets.length
+        ? relAssets
+            .map((a) => `<a href="${escapeHtml(a.browser_download_url)}" download="${escapeHtml(a.name)}">${escapeHtml(a.name)}</a> <span class="measured muted">(${escapeHtml(formatBytes(a.size))})</span>`)
+            .join(", ")
+        : `<span class="muted">Source archive</span>`;
+      return `
+        <tr>
+          <td class="measured">${escapeHtml(rel.tag_name)}</td>
+          <td class="measured">${escapeHtml(formatDate(rel.published_at))}</td>
+          <td>${packagesHtml}</td>
+          <td><a href="${escapeHtml(rel.html_url)}" target="_blank" rel="noopener noreferrer">Release</a></td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  if (toggleBtn) {
+    if (allReleasesCache.length <= 5) {
+      toggleBtn.hidden = true;
+    } else {
+      toggleBtn.hidden = false;
+      toggleBtn.textContent = showAllReleases
+        ? "Show fewer releases"
+        : `Show all ${allReleasesCache.length} releases`;
+    }
+  }
+}
+
+function renderReleases(releases, statusLabel) {
   if (!Array.isArray(releases) || !releases.length) return;
+  allReleasesCache = releases;
   const latest = releases[0];
   const tag = latest.tag_name || "v1.0.9";
   const dateStr = formatDate(latest.published_at);
   const assets = getInstallableAssets(latest);
 
   const headerPill = document.getElementById("header-version-pill");
-  const heroMeta = document.getElementById("hero-release-meta");
-  const countBadge = document.getElementById("release-count-badge");
-  const heroActions = document.getElementById("hero-download-actions");
+  const allReleasesBtn = document.getElementById("hero-all-releases-btn");
+  const heroBtn = document.getElementById("primary-download-btn");
+  const closeBtn = document.getElementById("close-download-btn");
+  const heroAssetMeta = document.getElementById("hero-asset-meta");
+  const latestTagDisplay = document.getElementById("latest-tag-display");
+  const latestDateDisplay = document.getElementById("latest-date-display");
+  const latestAssetsEl = document.getElementById("latest-assets");
+  const latestChangelogEl = document.getElementById("latest-changelog");
   const installCmd = document.getElementById("install-cmd");
   const terminalLabel = document.getElementById("terminal-label");
   const reviewEnv = document.getElementById("review-env");
 
   if (headerPill) headerPill.textContent = tag;
-  if (heroMeta) heroMeta.textContent = dateStr ? `${tag} · Updated ${dateStr}` : tag;
-  if (countBadge) countBadge.textContent = String(releases.length);
-  if (reviewEnv && reviewEnv.value.startsWith("v1.0.9")) {
-    reviewEnv.value = `${tag} · Ubuntu / Linux x64`;
+  if (allReleasesBtn) allReleasesBtn.textContent = `All releases (${releases.length})`;
+  if (latestTagDisplay) latestTagDisplay.textContent = tag;
+  if (latestDateDisplay) latestDateDisplay.textContent = dateStr;
+  if (reviewEnv && /^v\d+\.\d+\.\d+ on Ubuntu x64$/.test(reviewEnv.value)) {
+    reviewEnv.value = `${tag} on Ubuntu x64`;
   }
 
-  if (heroActions && assets.length) {
+  if (assets.length) {
     const primary = assets[0];
     const primaryInfo = classifyAsset(primary.name);
-    const secondaryAssets = assets.slice(1, 2);
+    const sizeText = formatBytes(primary.size);
 
-    let html = `
-      <a class="btn-primary" id="primary-download-btn" href="${escapeHtml(primary.browser_download_url)}" download="${escapeHtml(primary.name)}">
-        <span class="btn-title">Download ${escapeHtml(tag)} (${escapeHtml(primaryInfo.label)})</span>
-        <span class="btn-sub">${escapeHtml(formatBytes(primary.size))} · ${escapeHtml(primaryInfo.kind)} · Direct CDN</span>
-      </a>
-    `;
-
-    secondaryAssets.forEach((asset) => {
-      const info = classifyAsset(asset.name);
-      html += `
-        <a class="btn-secondary" href="${escapeHtml(asset.browser_download_url)}" download="${escapeHtml(asset.name)}">
-          ${escapeHtml(info.label)} (${escapeHtml(formatBytes(asset.size))})
-        </a>
-      `;
+    [heroBtn, closeBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.href = primary.browser_download_url;
+      btn.setAttribute("download", primary.name);
+      btn.innerHTML = `Download <span class="measured">${escapeHtml(tag)} (${escapeHtml(primaryInfo.label)})</span>`;
     });
 
-    html += `<a class="btn-secondary" href="#releases">All releases (<span>${releases.length}</span>)</a>`;
-    heroActions.innerHTML = html;
+    if (heroAssetMeta) {
+      heroAssetMeta.textContent = sizeText ? `${primary.name} (${sizeText})` : primary.name;
+    }
+
+    if (latestAssetsEl) {
+      latestAssetsEl.innerHTML = assets
+        .map((a) => `
+          <a class="chip chip--cool" href="${escapeHtml(a.browser_download_url)}" download="${escapeHtml(a.name)}">
+            ${escapeHtml(a.name)} <span class="measured">(${escapeHtml(formatBytes(a.size))})</span>
+          </a>
+        `)
+        .join("");
+    }
 
     if (installCmd && terminalLabel) {
       if (primary.name.toLowerCase().endsWith(".appimage")) {
-        terminalLabel.textContent = "Quick run AppImage in terminal";
+        terminalLabel.textContent = "Run latest AppImage";
         installCmd.textContent = `curl -fsSL ${primary.browser_download_url} -o ~/HyperDrain.AppImage && chmod +x ~/HyperDrain.AppImage && ~/HyperDrain.AppImage`;
       } else if (primary.name.toLowerCase().endsWith(".deb")) {
-        terminalLabel.textContent = "Quick install on Ubuntu / Debian";
+        terminalLabel.textContent = "Install latest package";
         installCmd.textContent = `curl -fsSL ${primary.browser_download_url} -o /tmp/hyperdrain.deb && sudo apt install -y /tmp/hyperdrain.deb`;
       }
     }
   }
 
-  const latestTagEl = document.getElementById("latest-tag");
-  const latestDateEl = document.getElementById("latest-date");
-  const latestGhLink = document.getElementById("latest-gh-link");
-  const latestAssetsEl = document.getElementById("latest-assets");
-  const latestChangelogEl = document.getElementById("latest-changelog");
-
-  if (latestTagEl) latestTagEl.textContent = tag;
-  if (latestDateEl) latestDateEl.textContent = dateStr;
-  if (latestGhLink && latest.html_url) latestGhLink.href = latest.html_url;
-
-  if (latestAssetsEl && assets.length) {
-    latestAssetsEl.innerHTML = assets
-      .map((a, idx) => `
-        <a class="asset-chip ${idx === 0 ? "asset-chip-primary" : ""}" href="${escapeHtml(a.browser_download_url)}" download="${escapeHtml(a.name)}">
-          <span>${escapeHtml(a.name)}</span>
-          <span class="asset-size">${escapeHtml(formatBytes(a.size))}</span>
-        </a>
-      `)
-      .join("");
-  }
-
   if (latestChangelogEl) {
-    const notes = parseChangelog(latest.body);
-    latestChangelogEl.innerHTML = notes.map((item) => `<li>${formatInlineMarkdown(item)}</li>`).join("");
+    const items = parseChangelog(latest.body);
+    latestChangelogEl.innerHTML = items.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
   }
 
-  const tbody = document.getElementById("releases-table-body");
-  if (tbody) {
-    tbody.innerHTML = releases
-      .map((rel) => {
-        const relAssets = getInstallableAssets(rel);
-        const assetLinks = relAssets.length
-          ? relAssets
-              .map((a) => `<a href="${escapeHtml(a.browser_download_url)}" download="${escapeHtml(a.name)}">${escapeHtml(a.name)}</a> <span class="muted-size">(${escapeHtml(formatBytes(a.size))})</span>`)
-              .join('<span class="table-asset-sep">·</span>')
-          : '<span class="muted-size">Source only</span>';
-        return `
-          <tr>
-            <td><code>${escapeHtml(rel.tag_name)}</code></td>
-            <td>${escapeHtml(formatDate(rel.published_at))}</td>
-            <td>${assetLinks}</td>
-            <td><a href="${escapeHtml(rel.html_url)}" target="_blank" rel="noopener noreferrer">Release page</a></td>
-          </tr>
-        `;
-      })
-      .join("");
-  }
+  renderReleaseTableRows();
 
-  const syncStatus = document.getElementById("releases-sync-status");
-  if (syncStatus) syncStatus.textContent = `${sourceLabel} · ${releases.length} releases`;
+  const syncEl = document.getElementById("releases-sync-status");
+  if (syncEl) syncEl.textContent = `${tag} ${statusLabel} (${releases.length})`;
 }
 
-async function loadReleases(forceRefresh = false) {
-  const syncStatus = document.getElementById("releases-sync-status");
-  if (!forceRefresh) {
+async function loadReleases(force = false) {
+  const syncEl = document.getElementById("releases-sync-status");
+  if (!force) {
     try {
-      const cachedRaw = sessionStorage.getItem(CACHE_KEY);
-      if (cachedRaw) {
-        const cached = JSON.parse(cachedRaw);
-        if (Date.now() - cached.ts < CACHE_TTL_MS && Array.isArray(cached.data)) {
-          renderReleases(cached.data, "Synced from GitHub");
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.ts < CACHE_TTL_MS && Array.isArray(parsed.data)) {
+          renderReleases(parsed.data, "synced");
           return;
         }
       }
@@ -182,7 +194,7 @@ async function loadReleases(forceRefresh = false) {
     }
   }
 
-  if (syncStatus) syncStatus.textContent = "Checking GitHub Releases…";
+  if (syncEl) syncEl.textContent = "Checking GitHub";
   try {
     const res = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -194,17 +206,61 @@ async function loadReleases(forceRefresh = false) {
       } catch {
         // Ignore storage quota
       }
-      renderReleases(published, "Live from GitHub");
+      renderReleases(published, "live");
     }
   } catch {
-    if (syncStatus) syncStatus.textContent = "Showing fallback v1.0.9 (GitHub API unavailable)";
+    if (syncEl) syncEl.textContent = "v1.0.9 cached";
   }
 }
 
-function parseRatingFromBody(body) {
-  const match = String(body || "").match(/Rating:\s*([1-5])\s*\/\s*5/i);
-  const count = match ? Number(match[1]) : 5;
-  return "★".repeat(count) + "☆".repeat(5 - count);
+// 4-Screen Pinned Walkthrough + Tab Switcher
+const stepItems = Array.from(document.querySelectorAll(".moment-item"));
+const stepButtons = Array.from(document.querySelectorAll(".moment-step"));
+const stageImages = Array.from(document.querySelectorAll(".stage-img"));
+const stageCaption = document.getElementById("stage-caption");
+let activeScreen = 0;
+
+function selectScreen(index) {
+  if (index === activeScreen || index < 0 || index >= stepButtons.length) return;
+  activeScreen = index;
+  stepItems.forEach((item, i) => item.classList.toggle("is-active", i === index));
+  stepButtons.forEach((btn, i) => {
+    btn.setAttribute("aria-selected", i === index ? "true" : "false");
+  });
+  stageImages.forEach((img, i) => {
+    img.classList.toggle("is-visible", i === index);
+  });
+  if (stageCaption && SCREEN_CAPTIONS[index]) {
+    stageCaption.textContent = SCREEN_CAPTIONS[index];
+  }
+}
+
+stepItems.forEach((item, index) => {
+  item.addEventListener("click", () => selectScreen(index));
+});
+
+const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (!prefersReduced && "IntersectionObserver" in window) {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (window.innerWidth <= 960) return;
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const idx = Number(entry.target.getAttribute("data-screen-index"));
+          if (!Number.isNaN(idx)) selectScreen(idx);
+        }
+      });
+    },
+    { rootMargin: "-35% 0px -45% 0px", threshold: 0.1 }
+  );
+  stepButtons.forEach((btn) => observer.observe(btn));
+}
+
+// Reviews
+function parseRating(body) {
+  const m = String(body || "").match(/Rating:\s*([1-5])\s*\/\s*5/i);
+  const val = m ? Number(m[1]) : 5;
+  return `${val} / 5`;
 }
 
 function cleanReviewBody(body) {
@@ -226,83 +282,72 @@ async function loadReviews() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const issues = await res.json();
     const reviews = Array.isArray(issues) ? issues.filter((i) => !i.pull_request) : [];
-
     statusEl.textContent = `${reviews.length} published`;
+
     if (!reviews.length) {
-      listEl.innerHTML = `
-        <div class="review-empty">
-          <p>No reviews posted yet. Download HyperDrain, try it out, and submit the first review using the form on the left.</p>
-        </div>
-      `;
+      listEl.innerHTML = `<div class="review-empty"><p>No reviews posted yet. Try HyperDrain on your machine and leave the first review on the left.</p></div>`;
       return;
     }
 
     listEl.innerHTML = reviews
       .map((item) => {
         const user = item.user || {};
-        const stars = parseRatingFromBody(item.body);
-        const bodyText = cleanReviewBody(item.body) || "(No written comment provided)";
+        const bodyText = cleanReviewBody(item.body) || "No comment text provided.";
         return `
-          <article class="review-card">
-            <div class="review-card-top">
+          <article class="review-item">
+            <div class="review-meta">
               <span class="review-author">
                 ${user.avatar_url ? `<img src="${escapeHtml(user.avatar_url)}" alt="" width="22" height="22">` : ""}
                 <span>@${escapeHtml(user.login || "user")}</span>
               </span>
-              <span class="review-stars" aria-label="Star rating">${stars}</span>
+              <span class="measured review-rating">${escapeHtml(parseRating(item.body))}</span>
             </div>
             <h4>${escapeHtml(item.title)}</h4>
             <p>${escapeHtml(bodyText)}</p>
-            <div class="review-card-foot">
-              <span>${escapeHtml(formatDate(item.created_at))} · ${item.comments || 0} replies</span>
-              <a href="${escapeHtml(item.html_url)}" target="_blank" rel="noopener noreferrer">Comment / Reply &rarr;</a>
+            <div class="review-foot">
+              <span class="measured">${escapeHtml(formatDate(item.created_at))}</span>
+              <a href="${escapeHtml(item.html_url)}" target="_blank" rel="noopener noreferrer">Reply (${item.comments || 0})</a>
             </div>
           </article>
         `;
       })
       .join("");
   } catch {
-    statusEl.textContent = "GitHub thread view";
-    listEl.innerHTML = `
-      <div class="review-empty">
-        <p>Live reviews could not be fetched right now. <a href="https://github.com/${REPO}/issues?q=label%3Areview" target="_blank" rel="noopener noreferrer">View &amp; post reviews directly on GitHub &rarr;</a></p>
-      </div>
-    `;
+    statusEl.textContent = "GitHub threads";
+    listEl.innerHTML = `<div class="review-empty"><p>View and post reviews directly on <a href="https://github.com/${REPO}/issues?q=label%3Areview" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</p></div>`;
   }
 }
 
-// Copy command buttons
 document.querySelectorAll("[data-copy-target]").forEach((button) => {
   button.addEventListener("click", async () => {
-    const targetId = button.getAttribute("data-copy-target");
-    const target = targetId ? document.getElementById(targetId) : null;
+    const id = button.getAttribute("data-copy-target");
+    const target = id ? document.getElementById(id) : null;
     const status = document.getElementById("live-status");
     const text = target && target.textContent ? target.textContent.trim() : "";
     if (!text) return;
-
     try {
       await navigator.clipboard.writeText(text);
-      const original = button.textContent;
+      const prev = button.textContent;
       button.textContent = "Copied";
-      if (status) status.textContent = "Install command copied to clipboard.";
-      window.setTimeout(() => {
-        button.textContent = original;
-      }, 1600);
+      if (status) status.textContent = "Install command copied.";
+      window.setTimeout(() => { button.textContent = prev; }, 1600);
     } catch {
-      if (status) status.textContent = "Copy failed. Please copy the command manually.";
+      if (status) status.textContent = "Copy failed.";
     }
   });
 });
 
-// Refresh releases button
 const refreshBtn = document.getElementById("refresh-releases-btn");
-if (refreshBtn) {
-  refreshBtn.addEventListener("click", () => {
-    loadReleases(true);
+if (refreshBtn) refreshBtn.addEventListener("click", () => loadReleases(true));
+
+const toggleReleasesBtn = document.getElementById("toggle-all-releases-btn");
+if (toggleReleasesBtn) {
+  toggleReleasesBtn.addEventListener("click", () => {
+    showAllReleases = !showAllReleases;
+    renderReleaseTableRows();
   });
 }
 
-// Review form -> pre-filled GitHub Issue with label=review
 const reviewForm = document.getElementById("review-form");
 if (reviewForm) {
   reviewForm.addEventListener("submit", (e) => {
@@ -312,7 +357,7 @@ if (reviewForm) {
     const title = document.getElementById("review-title").value.trim();
     const body = document.getElementById("review-body").value.trim();
 
-    const formattedBody = [
+    const formatted = [
       `**Rating:** ${rating}/5`,
       `**Version / OS:** ${env || "Linux"}`,
       "",
@@ -321,8 +366,8 @@ if (reviewForm) {
 
     const params = new URLSearchParams({
       labels: "review",
-      title: `[Review ${rating}★] ${title}`,
-      body: formattedBody
+      title: `[${rating}/5] ${title}`,
+      body: formatted
     });
 
     window.open(`https://github.com/${REPO}/issues/new?${params.toString()}`, "_blank", "noopener,noreferrer");

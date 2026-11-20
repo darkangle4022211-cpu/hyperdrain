@@ -3,439 +3,336 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HyperDrain — 32-Stream Resilient Desktop Downloader</title>
-  <meta name="description" content="HyperDrain is an open-source Go + Electron desktop downloader for Linux. 32 parallel WriteAt streams, fallocate pre-allocation, zombie socket watchdog, SQLite WAL recovery, and Manifest V3 browser integration.">
-  <meta name="theme-color" content="#070a0f">
+  <title>HyperDrain, 32-stream resilient desktop downloader</title>
+  <meta name="description" content="HyperDrain splits large transfers across 32 parallel Go streams with fallocate pre-allocation, zombie socket recovery, and SQLite WAL checkpoints.">
   <link rel="icon" type="image/png" href="./assets/icons/hyperdrain.png">
-  <!-- Warm DNS + TLS for instant CDN installer downloads and live release sync -->
   <link rel="preconnect" href="https://github.com" crossorigin>
   <link rel="preconnect" href="https://objects.githubusercontent.com" crossorigin>
   <link rel="preconnect" href="https://api.github.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500&family=Host+Grotesk:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="site-header">
-    <div class="container header-inner">
-      <a class="brand" href="#top" aria-label="HyperDrain Home">
-        <img src="./assets/icons/hyperdrain.png" alt="" width="28" height="28">
+  <header class="nav-shell">
+    <nav class="nav-pill" aria-label="Primary">
+      <a class="brand" href="#top" aria-label="HyperDrain home">
+        <img src="./assets/icons/hyperdrain.png" alt="" width="24" height="24">
         <span class="brand-name">HyperDrain</span>
-        <span class="version-pill" id="header-version-pill">v1.0.9</span>
-        <span class="status-dot" aria-hidden="true"></span>
       </a>
-
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="#screenshots">Screenshots</a>
-        <a href="#architecture">Architecture</a>
+      <span class="version-chip measured" id="header-version-pill">v1.1.0</span>
+      <div class="nav-links">
+        <a href="#compare">Compare</a>
+        <a href="#screens">Screens</a>
         <a href="#releases">Releases</a>
         <a href="#reviews">Reviews</a>
-        <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">GitHub</a>
-      </nav>
-    </div>
+        <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">Source</a>
+      </div>
+    </nav>
   </header>
 
   <main id="main">
-    <!-- Hero: Split Product Stage -->
     <section id="top" class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <div class="eyebrow">
-            <span class="eyebrow-dot" aria-hidden="true"></span>
-            <span>Linux Desktop Utility · Go Engine + Electron</span>
+          <h1>Fast downloads on slow links</h1>
+          <p class="lead">Thirty-two parallel streams keep multi-gigabyte transfers moving when connections drop.</p>
+
+          <div class="hero-actions" id="hero-download-actions">
+            <a
+              class="btn btn--primary"
+              id="primary-download-btn"
+              href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage"
+              download="HyperDrain-1.1.0.AppImage"
+            >
+              Download <span class="measured" id="hero-btn-version">v1.1.0 (AppImage)</span>
+            </a>
+            <a class="btn" href="#releases" id="hero-all-releases-btn">All releases (10)</a>
           </div>
-          <h1>32-stream downloads that never break on slow links.</h1>
-          <p class="lead">
-            Built for massive archives, ISOs, and media streams on unstable connections. HyperDrain pre-allocates disk space with
-            <code>fallocate</code>, writes 32 parallel HTTP streams via <code>WriteAt</code>, and checkpoints offsets to SQLite WAL every second.
+
+          <p class="hero-note">
+            <span class="measured" id="hero-asset-meta">HyperDrain-1.1.0.AppImage (145.9 MB)</span> downloads from GitHub CDN. Extension Hub then handles 32-stream capture.
           </p>
-
-          <div id="install" class="installer-card">
-            <div class="installer-head">
-              <span class="installer-label">Latest Release</span>
-              <span class="installer-meta" id="hero-release-meta">v1.0.9 · Updated Oct 23, 2026</span>
-            </div>
-
-            <div class="download-actions" id="hero-download-actions">
-              <a
-                class="btn-primary"
-                id="primary-download-btn"
-                href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb"
-                download="hyperdrain_1.0.9_amd64.deb"
-              >
-                <span class="btn-title" id="primary-download-title">Download v1.0.9 (.deb)</span>
-                <span class="btn-sub" id="primary-download-sub">126.8 MB · Ubuntu / Debian x64 · Direct CDN</span>
-              </a>
-              <a class="btn-secondary" href="#releases" id="all-releases-jump">
-                All releases (<span id="release-count-badge">9</span>)
-              </a>
-            </div>
-
-            <div class="terminal-install">
-              <div class="terminal-head">
-                <span id="terminal-label">Quick install on Ubuntu / Debian</span>
-                <button type="button" class="copy-btn" data-copy-target="install-cmd">Copy</button>
-              </div>
-              <pre><code id="install-cmd">curl -fsSL https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb -o /tmp/hyperdrain.deb &amp;&amp; sudo apt install -y /tmp/hyperdrain.deb</code></pre>
-            </div>
-
-            <p class="cdn-note">
-              This initial installer download streams straight from GitHub's global CDN (<code>objects.githubusercontent.com</code>) via your browser. Once installed and paired with Extension Hub, future large downloads hand off to HyperDrain's 32-stream Go engine.
-            </p>
-          </div>
         </div>
 
-        <figure class="hero-frame">
-          <div class="bezel">
+        <figure class="hero-stage">
+          <div class="screen-well">
             <img
               src="./assets/screenshots/active-downloads.png"
-              alt="HyperDrain v1.0.9 Active Downloads view showing the 60-second real-time throughput graph, disk write telemetry, and stream status"
+              alt="HyperDrain Active Downloads console showing real-time network speed, disk write rate, and stream status"
               width="1024"
               height="556"
               fetchpriority="high"
             >
           </div>
-          <figcaption>HyperDrain v1.0.9 — 60s real-time network &amp; disk telemetry with 32-stream task queue.</figcaption>
+          <figcaption class="caption">Active Downloads with throughput graph and disk write meter.</figcaption>
         </figure>
       </div>
     </section>
 
-    <!-- Compact Spec Strip -->
-    <section class="spec-bar" aria-label="Technical specifications">
+    <section id="compare" class="section section--band">
       <div class="container">
-        <dl class="spec-grid">
-          <div class="spec-item">
-            <dt>Concurrency</dt>
-            <dd>32-Way <code>WriteAt</code> Streams</dd>
+        <div class="section-head">
+          <h2>Why single streams stall</h2>
+          <p class="lead">Browsers rely on one socket. HyperDrain writes thirty-two ranges directly to disk.</p>
+        </div>
+
+        <div class="diff-panel" role="region" aria-label="Browser download versus HyperDrain comparison">
+          <div class="diff-col">
+            <div class="diff-col-head">Standard browser</div>
+            <ul class="diff-list">
+              <li class="row--minus"><span class="gutter" aria-hidden="true">-</span><span>Single TCP stream throttles on congested routes</span></li>
+              <li class="row--minus"><span class="gutter" aria-hidden="true">-</span><span>Parts copied and merged after completion</span></li>
+              <li class="row--minus"><span class="gutter" aria-hidden="true">-</span><span>Silent stalls on brief Wi-Fi dropouts</span></li>
+              <li class="row--minus"><span class="gutter" aria-hidden="true">-</span><span>Expiring headers force HTTP 403 restarts</span></li>
+            </ul>
           </div>
-          <div class="spec-item">
-            <dt>Disk Allocation</dt>
-            <dd><code>fallocate</code> (Zero File Join)</dd>
+
+          <div class="diff-col">
+            <div class="diff-col-head">HyperDrain engine</div>
+            <ul class="diff-list">
+              <li class="row--plus"><span class="gutter" aria-hidden="true">+</span><span><span class="measured">32</span> concurrent <span class="measured">WriteAt</span> streams</span></li>
+              <li class="row--plus"><span class="gutter" aria-hidden="true">+</span><span>Instant <span class="measured">fallocate</span> reservation, zero merge</span></li>
+              <li class="row--plus"><span class="gutter" aria-hidden="true">+</span><span><span class="measured">10 s</span> watchdog with SQLite WAL resume</span></li>
+              <li class="row--plus"><span class="gutter" aria-hidden="true">+</span><span>Manifest V3 cookie and header relay</span></li>
+            </ul>
           </div>
-          <div class="spec-item">
-            <dt>Crash Recovery</dt>
-            <dd>10s Watchdog + SQLite WAL</dd>
-          </div>
-          <div class="spec-item">
-            <dt>Platform &amp; Source</dt>
-            <dd>Linux x64 · <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">MIT Open Source</a></dd>
-          </div>
-        </dl>
+        </div>
       </div>
     </section>
 
-    <!-- Alternating Feature Rows (All 4 Screenshots) -->
-    <section id="screenshots" class="section">
+    <section id="screens" class="section">
       <div class="container">
         <div class="section-head">
-          <p class="section-eyebrow">Inside the Application</p>
-          <h2>Every control built around throughput and recovery</h2>
-          <p>Four dedicated workspaces inside a single frameless desktop window—no background bloat.</p>
+          <h2>Four views inside one window</h2>
+          <p class="lead">Select a workspace to inspect the live interface.</p>
         </div>
 
-        <div class="feature-rows">
-          <article class="feature-row">
-            <div class="row-copy">
-              <span class="row-index">01 · Active Downloads</span>
-              <h3>Real-time throughput &amp; 32-stream telemetry</h3>
-              <p>
-                Track live network speed, actual disk write throughput, and active TCP worker count on a 60-second canvas graph. Pause, resume, or recover interrupted transfers across reboots without losing a single byte.
-              </p>
-              <ul class="spec-tags">
-                <li>HTTP/2 Transport</li>
-                <li>SQLite WAL</li>
-                <li>Mini Popup Mode</li>
-              </ul>
+        <div class="pinned-walkthrough" id="pinned-walkthrough">
+          <div class="moment-list" role="tablist" aria-label="HyperDrain workspaces">
+            <div class="moment-item is-active" data-screen-index="0">
+              <button type="button" class="moment-step" role="tab" aria-selected="true" data-screen-index="0">Active downloads</button>
+              <p class="moment-desc">Track network speed, disk write rate, and worker streams on a 60-second graph.</p>
             </div>
-            <div class="bezel">
+
+            <div class="moment-item" data-screen-index="1">
+              <button type="button" class="moment-step" role="tab" aria-selected="false" data-screen-index="1">Extension hub</button>
+              <p class="moment-desc">Connect Chrome, Brave, Edge, or Firefox in one click or export the extension archive.</p>
+            </div>
+
+            <div class="moment-item" data-screen-index="2">
+              <button type="button" class="moment-step" role="tab" aria-selected="false" data-screen-index="2">Search and discover</button>
+              <p class="moment-desc">Filter catalogs by category, genre, year, and rating without leaving the app.</p>
+            </div>
+
+            <div class="moment-item" data-screen-index="3">
+              <button type="button" class="moment-step" role="tab" aria-selected="false" data-screen-index="3">Built-in browser</button>
+              <p class="moment-desc">Open web pages in an isolated browser with automatic HLS and MP4 detection.</p>
+            </div>
+          </div>
+
+          <div class="sticky-stage">
+            <div class="screen-well stage-frame">
               <img
+                id="stage-img-0"
+                class="stage-img is-visible"
                 src="./assets/screenshots/active-downloads.png"
-                alt="HyperDrain Active Downloads dashboard with 60-second throughput graph"
+                alt="HyperDrain Active Downloads view with real-time throughput graph"
                 width="1024"
                 height="556"
               >
-            </div>
-          </article>
-
-          <article class="feature-row row-reverse">
-            <div class="row-copy">
-              <span class="row-index">02 · Extension Hub</span>
-              <h3>1-click Manifest V3 browser handoff</h3>
-              <p>
-                Connect Chrome, Brave, Edge, or Firefox directly from the app or export the extension ZIP to share. Session cookies, <code>Referer</code>, and <code>User-Agent</code> headers forward automatically so authenticated links never hit 403 errors.
-              </p>
-              <ul class="spec-tags">
-                <li>Manifest V3</li>
-                <li>Cookie &amp; Header Relay</li>
-                <li>hyperdrain://wake</li>
-              </ul>
-            </div>
-            <div class="bezel">
               <img
+                id="stage-img-1"
+                class="stage-img"
                 src="./assets/screenshots/extension-hub.jpg"
-                alt="HyperDrain Universal Browser Extension Hub showing Chrome, Brave, Edge, and Firefox connection cards"
+                alt="HyperDrain Extension Hub with Chrome, Brave, Edge, and Firefox connectors"
                 width="1024"
                 height="556"
               >
-            </div>
-          </article>
-
-          <article class="feature-row">
-            <div class="row-copy">
-              <span class="row-index">03 · Search &amp; Discover</span>
-              <h3>Structured catalog browsing &amp; filtering</h3>
-              <p>
-                Filter media catalogs by category, genre, release year, and rating right inside the desktop shell—built for fast metadata lookup without juggling cluttered browser tabs.
-              </p>
-              <ul class="spec-tags">
-                <li>Multi-Filter Index</li>
-                <li>Category Tabs</li>
-                <li>Direct Queueing</li>
-              </ul>
-            </div>
-            <div class="bezel">
               <img
+                id="stage-img-2"
+                class="stage-img"
                 src="./assets/screenshots/search-discover.jpg"
-                alt="HyperDrain Search and Discover interface with category tabs and genre, year, and rating filters"
+                alt="HyperDrain Search and Discover catalog with genre and year filters"
                 width="1024"
                 height="556"
               >
-            </div>
-          </article>
-
-          <article class="feature-row row-reverse">
-            <div class="row-copy">
-              <span class="row-index">04 · Websites</span>
-              <h3>Embedded Chromium browser with stream detection</h3>
-              <p>
-                Open any web page directly inside HyperDrain's isolated browser view with automatic HLS/DASH <code>.m3u8</code> and <code>.mp4</code> stream sniffing—zero browser extension setup required.
-              </p>
-              <ul class="spec-tags">
-                <li>HLS / DASH Sniffer</li>
-                <li>Custom Shortcuts</li>
-                <li>Zero Extra RAM Idle</li>
-              </ul>
-            </div>
-            <div class="bezel">
               <img
+                id="stage-img-3"
+                class="stage-img"
                 src="./assets/screenshots/websites-browser.png"
-                alt="HyperDrain Websites embedded browser view with URL bar, saved site slots, and Add Site button"
+                alt="HyperDrain built-in Websites browser view with URL bar and custom site launcher"
                 width="1024"
                 height="556"
               >
             </div>
-          </article>
+            <p class="caption" id="stage-caption">Active Downloads console with 60-second throughput and disk telemetry.</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Balanced 4-Pillar Engineering Grid -->
-    <section id="architecture" class="section section-bordered">
+    <section id="releases" class="section section--band">
       <div class="container">
-        <div class="section-head">
-          <p class="section-eyebrow">Core Architecture</p>
-          <h2>Engineered in Go beneath a native Electron shell</h2>
-          <p>Why HyperDrain stays fast and reliable where single-stream browser downloads stall.</p>
-        </div>
-
-        <div class="pillar-grid">
-          <article class="pillar-card">
-            <h3>32-Stream <code>WriteAt</code> Engine</h3>
-            <p>
-              Opens up to 32 parallel HTTP/2 connections per file and writes chunks directly to their final byte offsets with <code>pwrite</code>—no post-download merging delay on 30&nbsp;GB files.
-            </p>
-          </article>
-
-          <article class="pillar-card">
-            <h3>Zombie Watchdog &amp; SQLite WAL</h3>
-            <p>
-              Detects stalled sockets within 10 seconds, respawns fresh ranges cleanly, handles HTTP 429/503 with exponential jitter backoff, and persists progress every second.
-            </p>
-          </article>
-
-          <article class="pillar-card">
-            <h3>Universal Extension Hub</h3>
-            <p>
-              Detects installed Chromium and Firefox browsers locally, copies the unpacked extension path in one click, and wakes the background daemon via <code>hyperdrain://wake</code>.
-            </p>
-          </article>
-
-          <article class="pillar-card">
-            <h3>Stream Sniffer &amp; Auto-Extractor</h3>
-            <p>
-              Captures multi-quality video and audio streams in the built-in browser and unpacks multi-gigabyte ZIP and RAR archives asynchronously on completion.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Auto-Synced Releases & Changelog -->
-    <section id="releases" class="section section-bordered">
-      <div class="container">
-        <div class="section-head releases-head-row">
-          <div>
-            <p class="section-eyebrow">Auto-Synced from GitHub</p>
-            <h2>All Releases &amp; Installers</h2>
-            <p>Automatically pulls the latest tags, <code>.AppImage</code> / <code>.deb</code> packages, and changelogs from <code>darkangle4022211-cpu/hyperdrain</code>.</p>
+        <div class="releases-header">
+          <div class="section-head">
+            <h2>Installers and release log</h2>
+            <p class="lead">Auto-synced from GitHub Releases on load.</p>
           </div>
-          <div class="sync-controls">
-            <span class="sync-status" id="releases-sync-status">Showing cached v1.0.9 · Checking GitHub…</span>
-            <button type="button" class="btn-refresh" id="refresh-releases-btn">Refresh</button>
+          <div class="sync-bar">
+            <span class="measured sync-label" id="releases-sync-status">v1.1.0 synced</span>
+            <button type="button" class="btn btn--small" id="refresh-releases-btn">Refresh</button>
           </div>
         </div>
 
-        <!-- Latest Release Spotlight -->
-        <div class="latest-release-box" id="latest-release-box">
-          <div class="latest-release-top">
-            <div class="latest-badges">
-              <span class="badge-latest">Latest</span>
-              <strong class="release-tag" id="latest-tag">v1.0.9</strong>
-              <span class="release-date" id="latest-date">Oct 23, 2026</span>
+        <div class="platform-split">
+          <dl class="req-list">
+            <div class="req-row">
+              <dt>Systems</dt>
+              <dd>Ubuntu, Debian, Linux x64</dd>
             </div>
-            <a class="release-gh-link" id="latest-gh-link" href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.9" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+            <div class="req-row">
+              <dt>Engine</dt>
+              <dd>Go HTTP/2 with <span class="measured">fallocate</span></dd>
+            </div>
+            <div class="req-row">
+              <dt>Storage</dt>
+              <dd>SQLite WAL, zero telemetry</dd>
+            </div>
+            <div class="req-row">
+              <dt>Wake</dt>
+              <dd><span class="measured">hyperdrain://wake</span></dd>
+            </div>
+          </dl>
+
+          <div class="install-console">
+            <div class="console-top">
+              <span class="measured" id="latest-tag-display">v1.1.0</span>
+              <span class="measured" id="latest-date-display">Nov 20, 2026</span>
+              <div class="asset-links" id="latest-assets">
+                <a class="chip chip--cool" href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage" download="HyperDrain-1.1.0.AppImage">
+                  HyperDrain-1.1.0.AppImage <span class="measured">(145.9 MB)</span>
+                </a>
+              </div>
+            </div>
+
+            <div class="cmd-box">
+              <div class="cmd-head">
+                <span id="terminal-label">Run latest AppImage</span>
+                <button type="button" class="btn btn--small" data-copy-target="install-cmd">Copy command</button>
+              </div>
+              <pre><code class="measured" id="install-cmd">curl -fsSL https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage -o ~/HyperDrain.AppImage &amp;&amp; chmod +x ~/HyperDrain.AppImage &amp;&amp; ~/HyperDrain.AppImage</code></pre>
+            </div>
+
+            <ul class="notes-list" id="latest-changelog">
+              <li>Built-in protected Websites browser and app launcher</li>
+              <li>Integrated Extension Hub and batch ZIP capture</li>
+              <li>Download-only mode and live proxy bypass sync</li>
+            </ul>
           </div>
-          <div class="release-assets" id="latest-assets">
-            <a class="asset-chip asset-chip-primary" href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb" download="hyperdrain_1.0.9_amd64.deb">
-              <span>hyperdrain_1.0.9_amd64.deb</span>
-              <span class="asset-size">126.8 MB</span>
-            </a>
-          </div>
-          <ul class="changelog-list" id="latest-changelog">
-            <li>IDM-style frameless 480&times;250 mini download popup with live speed, percentage, ETA, and folder reveal.</li>
-            <li>Silent background system tray mode that keeps the 32-stream Go engine running after closing the window.</li>
-            <li>Zero-touch auto-start registration and <code>hyperdrain://wake</code> deep-link handoff from browsers.</li>
-            <li>Online auto-update via <code>update.json</code> with full 32-stream throughput preserved.</li>
-          </ul>
         </div>
 
-        <!-- Full Release History Table -->
-        <div class="release-table-wrap">
+        <div class="table-wrap">
           <table class="release-table">
             <thead>
               <tr>
                 <th>Version</th>
                 <th>Published</th>
-                <th>Packages</th>
+                <th>Package</th>
                 <th>Notes</th>
               </tr>
             </thead>
             <tbody id="releases-table-body">
               <tr>
-                <td><code>v1.0.9</code></td>
-                <td>Oct 23, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb" download>hyperdrain_1.0.9_amd64.deb</a> <span class="muted-size">(126.8 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.9" target="_blank" rel="noopener noreferrer">Release page</a></td>
+                <td class="measured">v1.1.0</td>
+                <td class="measured">Nov 20, 2026</td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage" download>HyperDrain-1.1.0.AppImage</a> <span class="measured muted">(145.9 MB)</span></td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.1.0" target="_blank" rel="noopener noreferrer">Release</a></td>
               </tr>
               <tr>
-                <td><code>v1.0.8</code></td>
-                <td>Oct 20, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.8/hyperdrain_1.0.8_amd64.deb" download>hyperdrain_1.0.8_amd64.deb</a> <span class="muted-size">(126.8 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.8" target="_blank" rel="noopener noreferrer">Release page</a></td>
+                <td class="measured">v1.0.9</td>
+                <td class="measured">Oct 23, 2026</td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb" download>hyperdrain_1.0.9_amd64.deb</a> <span class="measured muted">(126.8 MB)</span></td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.9" target="_blank" rel="noopener noreferrer">Release</a></td>
               </tr>
               <tr>
-                <td><code>v1.0.7</code></td>
-                <td>Oct 16, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.7/hyperdrain_1.0.7_amd64.deb" download>hyperdrain_1.0.7_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.7" target="_blank" rel="noopener noreferrer">Release page</a></td>
+                <td class="measured">v1.0.8</td>
+                <td class="measured">Oct 20, 2026</td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.8/hyperdrain_1.0.8_amd64.deb" download>hyperdrain_1.0.8_amd64.deb</a> <span class="measured muted">(126.8 MB)</span></td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.8" target="_blank" rel="noopener noreferrer">Release</a></td>
               </tr>
               <tr>
-                <td><code>v1.0.6</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.6/hyperdrain_1.0.6_amd64.deb" download>hyperdrain_1.0.6_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.6" target="_blank" rel="noopener noreferrer">Release page</a></td>
+                <td class="measured">v1.0.7</td>
+                <td class="measured">Oct 16, 2026</td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.7/hyperdrain_1.0.7_amd64.deb" download>hyperdrain_1.0.7_amd64.deb</a> <span class="measured muted">(154.6 MB)</span></td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.7" target="_blank" rel="noopener noreferrer">Release</a></td>
               </tr>
               <tr>
-                <td><code>v1.0.5</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.5/hyperdrain_1.0.5_amd64.deb" download>hyperdrain_1.0.5_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.5" target="_blank" rel="noopener noreferrer">Release page</a></td>
-              </tr>
-              <tr>
-                <td><code>v1.0.4</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.4/hyperdrain_1.0.3_amd64.deb" download>hyperdrain_1.0.3_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.4" target="_blank" rel="noopener noreferrer">Release page</a></td>
-              </tr>
-              <tr>
-                <td><code>v1.0.3</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.3/hyperdrain_1.0.3_amd64.deb" download>hyperdrain_1.0.3_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.3" target="_blank" rel="noopener noreferrer">Release page</a></td>
-              </tr>
-              <tr>
-                <td><code>v1.0.2</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.2/hyperdrain_1.0.2_amd64.deb" download>hyperdrain_1.0.2_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.2" target="_blank" rel="noopener noreferrer">Release page</a></td>
-              </tr>
-              <tr>
-                <td><code>v1.0.1</code></td>
-                <td>Oct 14, 2026</td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.1/hyperdrain_1.0.1_amd64.deb" download>hyperdrain_1.0.1_amd64.deb</a> <span class="muted-size">(154.6 MB)</span></td>
-                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.1" target="_blank" rel="noopener noreferrer">Release page</a></td>
+                <td class="measured">v1.0.6</td>
+                <td class="measured">Oct 14, 2026</td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.6/hyperdrain_1.0.6_amd64.deb" download>hyperdrain_1.0.6_amd64.deb</a> <span class="measured muted">(154.6 MB)</span></td>
+                <td><a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.6" target="_blank" rel="noopener noreferrer">Release</a></td>
               </tr>
             </tbody>
           </table>
+          <div class="table-actions">
+            <button type="button" class="btn" id="toggle-all-releases-btn">Show all 10 releases</button>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- User Reviews & Comments -->
-    <section id="reviews" class="section section-bordered">
+    <section id="reviews" class="section">
       <div class="container">
-        <div class="section-head">
-          <p class="section-eyebrow">Community Feedback</p>
-          <h2>Tried HyperDrain? Leave your review &amp; comment</h2>
-          <p>After downloading and testing HyperDrain on your system, share how it performed. Published reviews appear right here for everyone.</p>
-        </div>
+        <div class="reviews-grid">
+          <div class="review-form-wrap">
+            <div class="section-head">
+              <h2>Leave a review</h2>
+              <p class="lead">Tried HyperDrain? Share speed or setup feedback below.</p>
+            </div>
 
-        <div class="reviews-layout">
-          <form class="review-form" id="review-form">
-            <h3>Write a review</h3>
-            <p class="form-hint">Posts directly as a public <code>review</code> entry on the HyperDrain GitHub repository so your feedback stays visible to all visitors.</p>
+            <form class="review-form" id="review-form">
+              <div class="form-pair">
+                <label class="field">
+                  <span>Rating</span>
+                  <select id="review-rating" name="rating">
+                    <option value="5">5 out of 5</option>
+                    <option value="4">4 out of 5</option>
+                    <option value="3">3 out of 5</option>
+                    <option value="2">2 out of 5</option>
+                    <option value="1">1 out of 5</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Version and OS</span>
+                  <input type="text" id="review-env" name="env" value="v1.1.0 on Ubuntu x64" maxlength="80" required>
+                </label>
+              </div>
 
-            <div class="form-row-two">
               <label class="field">
-                <span>Rating</span>
-                <select id="review-rating" name="rating">
-                  <option value="5">&#9733;&#9733;&#9733;&#9733;&#9733; (5 / 5)</option>
-                  <option value="4">&#9733;&#9733;&#9733;&#9733;&#9734; (4 / 5)</option>
-                  <option value="3">&#9733;&#9733;&#9733;&#9734;&#9734; (3 / 5)</option>
-                  <option value="2">&#9733;&#9733;&#9734;&#9734;&#9734; (2 / 5)</option>
-                  <option value="1">&#9733;&#9734;&#9734;&#9734;&#9734; (1 / 5)</option>
-                </select>
+                <span>Summary</span>
+                <input type="text" id="review-title" name="title" placeholder="Saturated my link on a 14 GB archive" maxlength="100" required>
               </label>
 
               <label class="field">
-                <span>Version &amp; OS</span>
-                <input type="text" id="review-env" name="env" value="v1.0.9 · Ubuntu / Linux x64" maxlength="80" required>
+                <span>Comment</span>
+                <textarea id="review-body" name="body" rows="4" placeholder="How did HyperDrain handle speed or reconnects?" maxlength="1500" required></textarea>
               </label>
-            </div>
 
-            <label class="field">
-              <span>Headline</span>
-              <input type="text" id="review-title" name="title" placeholder="e.g. Maxed out my fiber connection on a 12 GB archive" maxlength="100" required>
-            </label>
+              <div class="form-actions">
+                <button type="submit" class="btn btn--primary">Post review on GitHub</button>
+                <a class="text-link" href="https://github.com/darkangle4022211-cpu/hyperdrain/issues?q=label%3Areview" target="_blank" rel="noopener noreferrer">All reviews</a>
+              </div>
+            </form>
+          </div>
 
-            <label class="field">
-              <span>Your review or comment</span>
-              <textarea id="review-body" name="body" rows="4" placeholder="How was download speed, extension setup, or resume stability after a disconnect?" maxlength="1500" required></textarea>
-            </label>
-
-            <div class="form-actions">
-              <button type="submit" class="btn-primary btn-compact">Submit Review on GitHub</button>
-              <a class="form-secondary-link" href="https://github.com/darkangle4022211-cpu/hyperdrain/issues?q=label%3Areview" target="_blank" rel="noopener noreferrer">Browse all threads</a>
-            </div>
-          </form>
-
-          <div class="reviews-feed-panel">
-            <div class="feed-head">
-              <h3>Recent user reviews</h3>
-              <span class="feed-status" id="reviews-status">Loading reviews…</span>
+          <div class="reviews-feed">
+            <div class="feed-header">
+              <h3>Published reviews</h3>
+              <span class="measured feed-count" id="reviews-status">Loading reviews</span>
             </div>
             <div class="reviews-list" id="reviews-list">
               <div class="review-empty">
@@ -446,24 +343,57 @@
         </div>
       </div>
     </section>
+
+    <section class="section section--band close-band">
+      <div class="container close-grid">
+        <div class="close-copy">
+          <h2>Ready for faster transfers</h2>
+          <p class="lead">Install the latest Linux build and connect your browser in one click.</p>
+          <div class="hero-actions">
+            <a
+              class="btn btn--primary"
+              id="close-download-btn"
+              href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage"
+              download="HyperDrain-1.1.0.AppImage"
+            >
+              Download <span class="measured" id="close-btn-version">v1.1.0 (AppImage)</span>
+            </a>
+            <a class="btn" href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">Source</a>
+          </div>
+        </div>
+        <div class="screen-well close-shot">
+          <img
+            src="./assets/screenshots/extension-hub.jpg"
+            alt="HyperDrain Universal Browser Extension Hub ready to connect Chrome, Brave, Edge, and Firefox"
+            width="1024"
+            height="556"
+          >
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container footer-inner">
+    <div class="container footer-mast">
       <div class="footer-brand">
-        <img src="./assets/icons/hyperdrain.png" alt="" width="22" height="22">
-        <div>
-          <strong>HyperDrain</strong> · MIT Open Source · Built by Hamza Zafar
-        </div>
+        <a class="brand" href="#top" aria-label="HyperDrain top">
+          <img src="./assets/icons/hyperdrain.png" alt="" width="24" height="24">
+          <span class="brand-name">HyperDrain</span>
+        </a>
+        <p class="footer-desc">Go and Electron download manager by Hamza Zafar. MIT licensed.</p>
       </div>
-      <div class="footer-links">
+
+      <div class="footer-links-row">
+        <a href="#compare">Comparison</a>
+        <a href="#screens">Workspaces</a>
+        <a href="#releases">Installers</a>
+        <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">Source</a>
+        <a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+        <a href="#reviews">Reviews</a>
         <a href="mailto:hamza.zafar4022211@gmail.com">hamza.zafar4022211@gmail.com</a>
-        <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">Repository</a>
-        <a href="https://github.com/darkangle4022211-cpu/hyperdrain/issues" target="_blank" rel="noopener noreferrer">Issues</a>
-        <a href="#reviews">Leave a review</a>
       </div>
     </div>
-    <div id="live-status" class="sr-only" aria-live="polite"></div>
+    <div id="live-status" class="visually-hidden" aria-live="polite"></div>
   </footer>
 
   <script src="./app.js"></script>
