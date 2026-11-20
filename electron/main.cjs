@@ -32,7 +32,7 @@ const MINI_IPC_PORT = 6882;
 let miniServer = null;
 const miniWindows = new Map(); // taskId -> BrowserWindow
 const GITHUB_REPO = 'darkangle4022211-cpu/hyperdrain';
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.1.0';
 
 // Register IDM-style deep-link scheme
 app.setAsDefaultProtocolClient('hyperdrain');

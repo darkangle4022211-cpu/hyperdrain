@@ -1,25 +1,25 @@
 {
   "name": "hyperdrain",
   "repo": "darkangle4022211-cpu/hyperdrain",
-  "version": "1.0.9",
-  "tag": "v1.0.9",
-  "changelog": "• IDM-Style Lightweight Mini-Window: Frameless, always-on-top 480x250 download progress popup with real-time download speed, percentage, ETA countdown, pause/resume/cancel controls, and instant folder navigation upon completion.\n• Silent Background System Tray Mode: Closing the main window cleanly hides it to the Linux system tray without taskbar clutter while keeping high-speed engine downloads active.\n• Zero-Touch Auto-Start Integration: Automatically registers on system boot/login and deep-link protocol (hyperdrain://wake) so you never have to manually open the application in the background to start downloading from your browser.\n• Online Auto-Update & Uninterrupted High-Speed Core: Zero changes to the underlying Go download engine, preserving maximum 32-stream throughput, fallocate preallocation, and multi-track audio recovery.\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
+  "version": "1.1.0",
+  "tag": "v1.1.0",
+  "changelog": "• Built-in Protected Websites Browser & App Launcher: Edge-to-edge browsing with zero idle RAM/CPU overhead, real site favicons, ad/popup shield, 1-click download link handling, and instant renderer unload.\n• Integrated HyperDrain Extension & Batch ZIP Capture: Native floating video downloader, golden Episode Batch/ZIP capture, and 32-stream engine handoff inside the embedded browser.\n• Download-Only Eco Mode: Suppresses video frame/chunk decoding on CPU and GPU while still sniffing .m3u8/.mpd streams and Batch/ZIP links (toggleable in the browser bar).\n• Smart Domain Takeover & Live Proxy/DPI Bypass Sync: Automatically tracks mirror/domain redirects and manual domain updates, supports one-click Save Domain pinning, and syncs Settings proxy changes (Direct, ByeDPI, SpoofDPI) live with automatic offline fallback.\n\nIf you're facing a problem, feel free to contact the developer:\nEmail: hamza.zafar4022211@gmail.com",
   "support": {
     "message": "If you're facing a problem, feel free to contact the developer:",
     "email": "hamza.zafar4022211@gmail.com"
   },
   "platforms": {
     "linux-appimage-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/HyperDrain-1.0.9.AppImage",
-      "sha256": "",
-      "size": 0,
-      "filename": "HyperDrain-1.0.9.AppImage"
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-1.1.0.AppImage",
+      "sha256": "449f74a2530bc9162fa764a76c625d60504ad804a288f02539f83d2bc8eac936",
+      "size": 153001960,
+      "filename": "HyperDrain-1.1.0.AppImage"
     },
     "windows-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/HyperDrain-Setup-1.0.9.exe",
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.1.0/HyperDrain-Setup-1.1.0.exe",
       "sha256": "",
       "size": 0,
-      "filename": "HyperDrain-Setup-1.0.9.exe"
+      "filename": "HyperDrain-Setup-1.1.0.exe"
     }
   }
 }

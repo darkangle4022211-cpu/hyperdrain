@@ -7,7 +7,8 @@ const tokenFile = path.join(root, '.github_token');
 const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
 const owner = 'darkangle4022211-cpu';
 const repo = 'hyperdrain';
-const tag = process.argv[2] || 'v1.0.8';
+const pkg = require(path.join(root, 'package.json'));
+const tag = process.argv[2] || `v${pkg.version}`;
 const ver = tag.replace(/^v/, '');
 
 function apiReq(method, apiPath, body, headers = {}) {
@@ -84,6 +85,14 @@ function uploadAsset(uploadUrlRaw, filename, filePath, contentType = 'applicatio
 }
 
 async function run() {
+  const updateJsonPath = path.resolve(__dirname, '../update.json');
+  const updateMeta = fs.existsSync(updateJsonPath)
+    ? JSON.parse(fs.readFileSync(updateJsonPath, 'utf8'))
+    : {};
+  const releaseNotes = updateMeta.changelog
+    ? `### HyperDrain ${tag}\n\n${updateMeta.changelog}`
+    : `### HyperDrain ${tag}`;
+
   console.log(`Checking release ${tag}...`);
   let relRes = await apiReq('GET', `/repos/${owner}/${repo}/releases/tags/${tag}`);
   let rel;
@@ -94,7 +103,7 @@ async function run() {
       tag_name: tag,
       target_commitish: 'main',
       name: `${tag} - Production Release`,
-      body: `### HyperDrain ${tag}\n\n• **IDM-Style Lightweight Mini-Window**: Frameless, always-on-top 480x250 download progress popup with real-time download speed, percentage, ETA countdown, pause/resume/cancel controls, and instant folder navigation upon completion.\n• **Silent Background System Tray Mode**: Closing the main window cleanly hides it to the Linux system tray without taskbar clutter while keeping high-speed engine downloads active.\n• **Zero-Touch Auto-Start Integration**: Automatically registers on system boot/login and deep-link protocol (\`hyperdrain://wake\`) so you never have to manually open the application in the background to start downloading from your browser.\n• **Online Auto-Update & Uninterrupted High-Speed Core**: Zero changes to the underlying Go download engine, preserving maximum 32-stream throughput, \`fallocate\` preallocation, and multi-track audio recovery.`,
+      body: releaseNotes,
       draft: false,
       prerelease: false
     });
@@ -110,32 +119,46 @@ async function run() {
     throw new Error(`Unexpected release status for ${tag}: ` + JSON.stringify(relRes));
   }
 
-  // 1. Delete existing assets that conflict
+  // Locate AppImage (preferred) or deb fallback
+  const appImageFilename = `HyperDrain-${ver}.AppImage`;
+  const debFilename = `hyperdrain_${ver}_amd64.deb`;
+  let pkgFilename = appImageFilename;
+  let pkgContentType = 'application/octet-stream';
+  let pkgPath = path.resolve(__dirname, `../dist-electron/${appImageFilename}`);
+  if (!fs.existsSync(pkgPath)) {
+    pkgPath = path.resolve(__dirname, `../releases/${appImageFilename}`);
+  }
+  if (!fs.existsSync(pkgPath)) {
+    pkgFilename = debFilename;
+    pkgContentType = 'application/vnd.debian.binary-package';
+    pkgPath = path.resolve(__dirname, `../dist-electron/${debFilename}`);
+    if (!fs.existsSync(pkgPath)) {
+      pkgPath = path.resolve(__dirname, `../releases/${debFilename}`);
+    }
+  }
+  if (!fs.existsSync(pkgPath)) {
+    throw new Error(`Release package not found for ${ver} in dist-electron/ or releases/`);
+  }
+
+  // Delete only conflicting assets with the same names we are uploading
+  const targetNames = new Set([pkgFilename, 'update.json']);
   if (rel.assets && rel.assets.length > 0) {
     for (const asset of rel.assets) {
-      console.log(`Removing old release asset: ${asset.name} (id: ${asset.id})...`);
-      await apiReq('DELETE', `/repos/${owner}/${repo}/releases/assets/${asset.id}`);
+      if (targetNames.has(asset.name)) {
+        console.log(`Removing existing asset: ${asset.name} (id: ${asset.id})...`);
+        await apiReq('DELETE', `/repos/${owner}/${repo}/releases/assets/${asset.id}`);
+      }
     }
   }
 
-  // 2. Upload deb package
-  const debFilename = `hyperdrain_${ver}_amd64.deb`;
-  let debPath = path.resolve(__dirname, `../dist-electron/${debFilename}`);
-  if (!fs.existsSync(debPath)) {
-    debPath = path.resolve(__dirname, `../releases/${debFilename}`);
+  // Upload package asset
+  const uploadPkgRes = await uploadAsset(rel.upload_url, pkgFilename, pkgPath, pkgContentType);
+  if (uploadPkgRes.status !== 201) {
+    throw new Error(`Failed to upload ${pkgFilename}: ` + JSON.stringify(uploadPkgRes));
   }
-  if (!fs.existsSync(debPath)) {
-    throw new Error(`Deb package not found at: ${debPath}`);
-  }
+  console.log(`✅ ${pkgFilename} uploaded successfully!`);
 
-  const uploadDebRes = await uploadAsset(rel.upload_url, debFilename, debPath, 'application/vnd.debian.binary-package');
-  if (uploadDebRes.status !== 201) {
-    throw new Error('Failed to upload deb asset: ' + JSON.stringify(uploadDebRes));
-  }
-  console.log(`✅ ${debFilename} uploaded successfully!`);
-
-  // 3. Upload update.json
-  const updateJsonPath = path.resolve(__dirname, '../update.json');
+  // Upload update.json
   const uploadJsonRes = await uploadAsset(rel.upload_url, 'update.json', updateJsonPath, 'application/json');
   if (uploadJsonRes.status !== 201) {
     throw new Error('Failed to upload update.json: ' + JSON.stringify(uploadJsonRes));
