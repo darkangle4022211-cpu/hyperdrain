@@ -1,8 +1,7 @@
-# HyperDrain & Desktop Software Portfolio
+# HyperDrain — Official Profile & Installer
 
-Live site: https://darkangle4022211-cpu.github.io/
+Live site: https://darkangle4022211-cpu.github.io/hyperdrain/
 
-Showcases:
-- **HyperDrain** (`v1.0.9`) — 32-stream Go + Electron desktop downloader with `fallocate` pre-allocation and SQLite WAL recovery.
-- **Pulsar Audio** (`v1.1.15`) — Offline MP3/FLAC/WAV music player with 10-band EQ and 60fps visualizer.
-- **PulseRelease** (`v1.0.9`) — Desktop release console and universal `update.json` updater.
+- Exclusive HyperDrain showcase built in Obsidian Telemetry styling (`#070a0f` + `#00d2ff`).
+- Auto-syncs latest release, `.AppImage` / `.deb` CDN links, file sizes, and all historical releases from `darkangle4022211-cpu/hyperdrain`.
+- Community reviews and comments powered by GitHub `review` issues.
