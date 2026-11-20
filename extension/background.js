@@ -137,19 +137,27 @@ function handleDetected(url, tabId, reqHeaders = [], initiator = "") {
       } catch(e) {}
     }
 
+    let masterUrl = "";
+    if (isM3U8) {
+      const subPattern = /\/(?:aud|audio|vid|video|\d{3,4})(?:\/[^/]+)?\/index\.m3u8(\?.*)?$/i;
+      if (subPattern.test(targetUrl)) {
+        masterUrl = targetUrl.replace(subPattern, "/master.m3u8$1");
+        targetUrl = masterUrl;
+      } else if (targetUrl.includes("master.m3u8")) {
+        masterUrl = targetUrl;
+      }
+    }
+
     let streams = detectedStreamsByTab.get(tabId) || [];
     let existingIndex = streams.findIndex(s => s.url === targetUrl);
     if (existingIndex >= 0) {
       if (referer && !streams[existingIndex].referer) streams[existingIndex].referer = referer;
       if (origin && !streams[existingIndex].origin) streams[existingIndex].origin = origin;
       if (cookie && !streams[existingIndex].cookie) streams[existingIndex].cookie = cookie;
+      if (masterUrl && !streams[existingIndex].master_url) streams[existingIndex].master_url = masterUrl;
       const item = streams.splice(existingIndex, 1)[0];
       streams.unshift(item);
     } else {
-      let masterUrl = "";
-      if (isM3U8 && /\/(1080|720|360|480)\/index\.m3u8/.test(targetUrl)) {
-        masterUrl = targetUrl.replace(/\/(1080|720|360|480)\/index\.m3u8/, "/master.m3u8");
-      }
       const streamInfo = {
         url: targetUrl,
         master_url: masterUrl,
@@ -327,8 +335,9 @@ let currentPromptWinId = null;
 
 async function openDownloadPrompt(url, filename, referer, formatId = "", origin = "", passedCookie = "", isIncognito = false) {
   let chosenDir = "";
+
+  // 1. Immediately trigger the Ubuntu native folder picker in front of the user
   try {
-    // 1. Immediately trigger the Ubuntu native folder picker in front of the user
     const res = await fetch(`${CORE_API}/api/choose-folder`, {
       method: "POST",
       headers: { "X-HyperDrain-Token": AUTH_TOKEN }
@@ -336,47 +345,28 @@ async function openDownloadPrompt(url, filename, referer, formatId = "", origin 
     if (res.ok) {
       const data = await res.json();
       if (data.cancelled || !data.path) {
-        // User pressed Cancel or closed the Ubuntu dialog; abort cleanly
+        // User cancelled folder selection; abort cleanly
         return;
       }
       chosenDir = data.path;
       if (chrome.storage?.local) {
         chrome.storage.local.set({ last_target_dir: chosenDir });
       }
+    } else {
+      console.warn("Folder picker API returned:", res.status);
     }
   } catch (err) {
-    console.warn("Could not trigger Ubuntu native folder picker:", err);
+    console.warn("Could not trigger Ubuntu folder picker:", err);
   }
 
-  // Fallback to validated directory from engine settings
+  // If user cancelled or no folder was chosen, stop
   if (!chosenDir) {
-    try {
-      const setRes = await fetch(`${CORE_API}/api/settings`, {
-        headers: { "X-HyperDrain-Token": AUTH_TOKEN }
-      });
-      if (setRes.ok) {
-        const setData = await setRes.json();
-        if (setData && setData.download_dir) {
-          chosenDir = setData.download_dir;
-          if (chrome.storage?.local) {
-            chrome.storage.local.set({ last_target_dir: chosenDir });
-          }
-        }
-      }
-    } catch (e) {}
-  }
-  if (!chosenDir && chrome.storage?.local) {
-    try {
-      const stored = await chrome.storage.local.get(["last_target_dir"]);
-      if (stored && stored.last_target_dir) {
-        chosenDir = stored.last_target_dir;
-      }
-    } catch (e) {}
+    return;
   }
 
   const isIncogContext = isIncognito || Boolean(chrome.extension?.inIncognitoContext);
 
-  // If no cookie was passed directly, try to fetch from the correct cookie store
+  // If no cookie was passed directly, fetch from cookie store
   if (!passedCookie) {
     try {
       const parsed = new URL(url);
@@ -387,29 +377,89 @@ async function openDownloadPrompt(url, filename, referer, formatId = "", origin 
       }
       passedCookie = (cookies || []).map(c => `${c.name}=${c.value}`).join("; ");
     } catch(e) {
-      console.warn("Could not fetch cookies for prompt:", e);
+      console.warn("Could not fetch cookies:", e);
     }
   }
 
-  // 2. Open confirmation bar pre-filled with the selected destination folder
-  let promptUrl = `prompt.html?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}&referer=${encodeURIComponent(referer)}`;
-  if (chosenDir) {
-    promptUrl += `&target_dir=${encodeURIComponent(chosenDir)}`;
-  }
-  if (formatId) {
-    promptUrl += `&format_id=${encodeURIComponent(formatId)}`;
-  }
-  if (origin) {
-    promptUrl += `&origin=${encodeURIComponent(origin)}`;
-  }
-  if (passedCookie) {
-    promptUrl += `&cookie=${encodeURIComponent(passedCookie)}`;
-  }
-  if (isIncogContext) {
-    promptUrl += `&incognito=1`;
+  let cleanReferer = referer || "";
+  if (cleanReferer) {
+    try {
+      const u = new URL(cleanReferer);
+      if (!u.pathname || u.pathname === "") {
+        u.pathname = "/";
+        cleanReferer = u.href;
+      }
+    } catch(e) {}
   }
 
-  createNewPromptWindow(promptUrl, isIncogContext);
+  let cleanOrigin = origin || "";
+  if (cleanOrigin && cleanOrigin.endsWith("/")) {
+    cleanOrigin = cleanOrigin.slice(0, -1);
+  }
+
+  const isStreamOrVideo = Boolean(
+    formatId || 
+    url.includes(".m3u8") || 
+    url.includes(".mpd") || 
+    url.includes("youtube.com") || 
+    url.includes("youtu.be") || 
+    url.includes("googlevideo") ||
+    url.includes("/embed") ||
+    url.includes("/stream")
+  );
+
+  let endpoint = `${CORE_API}/api/tasks/add`;
+  let payload = {
+    url: url,
+    suggested_name: filename,
+    target_dir: chosenDir,
+    referer: cleanReferer,
+    cookie: passedCookie,
+    user_agent: navigator.userAgent,
+    connections: 32,
+    auto_extract: false
+  };
+
+  if (isStreamOrVideo) {
+    endpoint = `${CORE_API}/api/download-stream`;
+    payload = {
+      url: url,
+      format_id: formatId || "1080p",
+      title: filename,
+      target_dir: chosenDir,
+      referer: cleanReferer,
+      origin: cleanOrigin,
+      cookie: passedCookie,
+      user_agent: navigator.userAgent,
+      connections: 32
+    };
+  }
+
+  // 2. Start the download immediately into the chosen location!
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-HyperDrain-Token": AUTH_TOKEN
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const taskId = data.task_id || data.id;
+      if (taskId) {
+        // Trigger IDM-style mini window in Electron desktop app
+        fetch(`http://127.0.0.1:6882/notify-download?taskId=${encodeURIComponent(taskId)}`).catch(() => {});
+      }
+      showNativeNotification("HyperDrain ⚡ Download Started", `Saving to: ${chosenDir}`);
+    } else {
+      console.error("Engine returned error starting download:", res.status);
+    }
+  } catch (err) {
+    console.error("Failed to start download:", err);
+  }
 }
 
 function createNewPromptWindow(promptUrl, isIncognito = false) {
@@ -533,36 +583,9 @@ async function checkCoreTasks() {
   }
 }
 
-// Background task poll interval
-setInterval(checkCoreTasks, 1000);
+// Background task poll interval (silent polling when engine is active)
+setInterval(checkCoreTasks, 2000);
 checkCoreTasks();
-
-// Real-time WebSocket connection to Go engine for instantaneous zero-latency alerts
-let extWs = null;
-function connectCoreWs() {
-  try {
-    extWs = new WebSocket("ws://127.0.0.1:6880/ws");
-    extWs.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data && Array.isArray(data.tasks)) {
-          for (const task of data.tasks) {
-            handleTaskStatusChange(task);
-          }
-        }
-      } catch (err) {}
-    };
-    extWs.onclose = () => {
-      setTimeout(connectCoreWs, 3000);
-    };
-    extWs.onerror = () => {
-      try { extWs.close(); } catch(e) {}
-    };
-  } catch (err) {
-    setTimeout(connectCoreWs, 3000);
-  }
-}
-connectCoreWs();
 
 function notifyUser(title, message) {
   try {

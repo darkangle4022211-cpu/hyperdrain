@@ -1431,7 +1431,10 @@
         const validStreams = sniffedStreams.filter((stream) => {
           if (!stream || !stream.url) return false;
           const u = stream.url.toLowerCase();
-          // Never treat single HLS/DASH fragment slices as whole streams
+          // Never treat standalone audio playlists or single HLS/DASH fragment slices as whole streams
+          if (/\/(?:aud|audio)\/[^/]+\/index\.m3u8/i.test(u)) {
+            return false;
+          }
           if (
             /\.(ts|m4s|m4f|key)(\?.*)?$/i.test(u) ||
             u.includes("/seg_") ||
@@ -1646,19 +1649,31 @@
   });
 
   setInterval(() => {
+    if (document.hidden) return;
     refreshEngineStatus((online) => {
       if (online) {
         attachVideoPanels();
         attachBatchEpisodeButton();
       }
     });
-  }, 1500);
+  }, 8000);
 
-  const observer = new MutationObserver(() => {
-    if (isEngineOnline) {
-      attachVideoPanels();
-      attachBatchEpisodeButton();
-    }
+  let mutationTimer = null;
+  const observer = new MutationObserver((mutations) => {
+    if (!isEngineOnline) return;
+    const relevant = mutations.some((m) => {
+      const t = m.target;
+      if (!t || !t.closest) return true;
+      return !t.closest(".hd-video-panel, .hd-batch-btn, .hd-batch-overlay");
+    });
+    if (!relevant || mutationTimer) return;
+    mutationTimer = setTimeout(() => {
+      mutationTimer = null;
+      if (isEngineOnline) {
+        attachVideoPanels();
+        attachBatchEpisodeButton();
+      }
+    }, 350);
   });
   observer.observe(document.body || document.documentElement, {
     childList: true,

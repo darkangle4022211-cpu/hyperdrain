@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +17,37 @@ var (
 	notifyMu             sync.Mutex
 )
 
-// SendUbuntuNotification triggers a native Ubuntu desktop notification via libnotify (notify-send)
+// SendPlatformNotification triggers a desktop notification on the current OS (Windows Toast or Linux libnotify)
+func SendPlatformNotification(title, message, urgency string) error {
+	if runtime.GOOS == "windows" {
+		return sendWindowsNotification(title, message, urgency)
+	}
+	return sendLinuxNotification(title, message, urgency)
+}
+
+// SendUbuntuNotification is an alias kept for backward compatibility across the codebase
 func SendUbuntuNotification(title, message, urgency string) error {
+	return SendPlatformNotification(title, message, urgency)
+}
+
+func sendWindowsNotification(title, message, urgency string) error {
+	safeTitle := strings.ReplaceAll(title, `"`, `\"`)
+	safeMsg := strings.ReplaceAll(message, `"`, `\"`)
+	safeMsg = strings.ReplaceAll(safeMsg, "\n", " ")
+
+	psScript := fmt.Sprintf(`[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null; $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); $textNodes = $template.GetElementsByTagName('text'); $textNodes.Item(0).AppendChild($template.CreateTextNode("%s")) > $null; $textNodes.Item(1).AppendChild($template.CreateTextNode("%s")) > $null; $toast = [Windows.UI.Notifications.ToastNotification]::new($template); [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("HyperDrain.HighSpeedDownloader").Show($toast)`, safeTitle, safeMsg)
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", psScript)
+	if err := cmd.Run(); err != nil {
+		fallbackScript := fmt.Sprintf(`Add-Type -AssemblyName System.Windows.Forms; $ni = New-Object System.Windows.Forms.NotifyIcon; $ni.Icon = [System.Drawing.SystemIcons]::Information; $ni.Visible = $true; $ni.ShowBalloonTip(4000, "%s", "%s", [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -s 1; $ni.Dispose()`, safeTitle, safeMsg)
+		fallbackCmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", fallbackScript)
+		return fallbackCmd.Run()
+	}
+	return nil
+}
+
+// sendLinuxNotification triggers a native Linux desktop notification via libnotify (notify-send)
+func sendLinuxNotification(title, message, urgency string) error {
 	notifySend, err := exec.LookPath("notify-send")
 	if err != nil {
 		notifySend = "/usr/bin/notify-send"
@@ -93,8 +123,13 @@ func SendUbuntuNotification(title, message, urgency string) error {
 	return nil
 }
 
-// PlayCompleteSound plays the native Ubuntu completion chime
+// PlayCompleteSound plays the platform-native completion chime
 func PlayCompleteSound() {
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", "[System.Media.SystemSounds]::Asterisk.Play()")
+		_ = cmd.Start()
+		return
+	}
 	if _, err := exec.LookPath("canberra-gtk-play"); err == nil {
 		cmd := exec.Command("canberra-gtk-play", "-i", "complete")
 		_ = cmd.Start()
@@ -114,8 +149,13 @@ func PlayCompleteSound() {
 	}
 }
 
-// PlayErrorSound plays the native Ubuntu error/warning chime
+// PlayErrorSound plays the platform-native error/warning chime
 func PlayErrorSound() {
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", "[System.Media.SystemSounds]::Hand.Play()")
+		_ = cmd.Start()
+		return
+	}
 	if _, err := exec.LookPath("canberra-gtk-play"); err == nil {
 		cmd := exec.Command("canberra-gtk-play", "-i", "dialog-warning")
 		_ = cmd.Start()

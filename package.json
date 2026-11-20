@@ -9,8 +9,8 @@
     "start": "electron --no-sandbox .",
     "build:engine": "bash scripts/build_engine.sh",
     "build:release": "bash scripts/build_release.sh",
-    "dist:linux": "electron-builder --linux deb",
-    "dist:win": "electron-builder --win portable"
+    "dist:appimage": "bash scripts/build_appimage.sh",
+    "dist:win:dir": "electron-builder --win --dir --x64"
   },
   "keywords": [
     "downloader",
@@ -33,18 +33,20 @@
     },
     "files": [
       "assets/**/*",
+      "bin/**/*",
       "electron/**/*",
       "extension/**/*",
       "webui/**/*",
       "hyperdrain-engine",
       "hyperdrain",
       "hyperdrain.exe",
+      "hyperdrain-engine.exe",
       "update.json",
       "package.json"
     ],
     "linux": {
       "target": [
-        "deb"
+        "AppImage"
       ],
       "category": "Network;FileTransfer;",
       "icon": "assets/hyperdrain.png",
@@ -54,7 +56,7 @@
     },
     "win": {
       "target": [
-        "portable"
+        "dir"
       ],
       "icon": "assets/hyperdrain.png"
     }

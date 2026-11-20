@@ -1,11 +1,13 @@
 package engine
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -98,6 +100,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, webUIDir string) {
 	mux.HandleFunc("/api/video-info", withCORS(s.handleVideoInfo))
 	mux.HandleFunc("/api/download-stream", withCORS(s.handleDownloadStream))
 	mux.HandleFunc("/api/download-stream-batch", withCORS(s.handleDownloadStreamBatch))
+	mux.HandleFunc("/api/extension.zip", withCORS(s.handleExportExtensionZip))
 
 	// Serve Dashboard UI with no-cache headers to prevent stale UI assets
 	fs := http.FileServer(http.Dir(webUIDir))
@@ -194,6 +197,17 @@ func isStreamOrVideoURL(rawURL string) bool {
 	return false
 }
 
+func normalizeToMasterPlaylist(rawURL string) string {
+	if strings.Contains(rawURL, "master.m3u8") {
+		return rawURL
+	}
+	reSub := regexp.MustCompile(`/(?:aud|audio|vid|video|\d{3,4})(?:/[^/]+)?/index\.m3u8(\?.*)?$`)
+	if reSub.MatchString(rawURL) {
+		return reSub.ReplaceAllString(rawURL, "/master.m3u8$1")
+	}
+	return rawURL
+}
+
 func recoverPlaylistURL(streamURL string) string {
 	reSeg := regexp.MustCompile(`/(?:seg_[^/?#]+|segment[^/?#]*|index[^/?#]*)\.ts`)
 	if reSeg.MatchString(streamURL) {
@@ -209,7 +223,137 @@ func recoverPlaylistURL(streamURL string) string {
 			streamURL = prefix + "/index.m3u8"
 		}
 	}
-	return streamURL
+	return normalizeToMasterPlaylist(streamURL)
+}
+
+func estimateHLSStreamSize(rawURL, formatSelector, referer, origin, cookie, userAgent string) int64 {
+	masterURL := normalizeToMasterPlaylist(rawURL)
+	if !strings.Contains(masterURL, ".m3u8") {
+		return 0
+	}
+	client := &http.Client{Timeout: 4 * time.Second}
+
+	req, err := http.NewRequest("GET", masterURL, nil)
+	if err != nil {
+		return 0
+	}
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	} else {
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
+	}
+
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		return 0
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return 0
+	}
+
+	content := string(body)
+
+	prefRes := "1080"
+	if strings.Contains(formatSelector, "720") {
+		prefRes = "720"
+	} else if strings.Contains(formatSelector, "360") {
+		prefRes = "360"
+	} else if strings.Contains(formatSelector, "480") {
+		prefRes = "480"
+	}
+
+	reVariant := regexp.MustCompile(`(?m)#EXT-X-STREAM-INF:[^\r\n]*BANDWIDTH=(\d+)[^\r\n]*\r?\n([^\r\n#]+)`)
+	matches := reVariant.FindAllStringSubmatch(content, -1)
+
+	var targetBW int64 = 0
+	var targetSubPath string = ""
+
+	if len(matches) > 0 {
+		for _, m := range matches {
+			bw, _ := strconv.ParseInt(m[1], 10, 64)
+			sub := strings.TrimSpace(m[2])
+			if strings.Contains(m[0], prefRes) || strings.Contains(sub, prefRes) {
+				targetBW = bw
+				targetSubPath = sub
+				break
+			}
+		}
+		if targetBW == 0 {
+			for _, m := range matches {
+				bw, _ := strconv.ParseInt(m[1], 10, 64)
+				if bw > targetBW {
+					targetBW = bw
+					targetSubPath = strings.TrimSpace(m[2])
+				}
+			}
+		}
+	}
+
+	subContent := content
+	if targetSubPath != "" {
+		baseParsed, err := url.Parse(masterURL)
+		if err == nil {
+			subRef, err := url.Parse(targetSubPath)
+			if err == nil {
+				subURL := baseParsed.ResolveReference(subRef).String()
+				reqSub, errSub := http.NewRequest("GET", subURL, nil)
+				if errSub == nil {
+					if referer != "" {
+						reqSub.Header.Set("Referer", referer)
+					}
+					if origin != "" {
+						reqSub.Header.Set("Origin", origin)
+					}
+					if cookie != "" {
+						reqSub.Header.Set("Cookie", cookie)
+					}
+					if userAgent != "" {
+						reqSub.Header.Set("User-Agent", userAgent)
+					}
+					respSub, errDo := client.Do(reqSub)
+					if errDo == nil && respSub.StatusCode == 200 {
+						if subBody, errRead := io.ReadAll(respSub.Body); errRead == nil {
+							subContent = string(subBody)
+						}
+						respSub.Body.Close()
+					}
+				}
+			}
+		}
+	} else if targetBW == 0 {
+		targetBW = 5000000 // default 5 Mbps
+	}
+
+	reInf := regexp.MustCompile(`#EXTINF:([\d.]+)`)
+	infMatches := reInf.FindAllStringSubmatch(subContent, -1)
+	if len(infMatches) == 0 {
+		return 0
+	}
+
+	var totalDuration float64 = 0
+	for _, im := range infMatches {
+		if dur, err := strconv.ParseFloat(im[1], 64); err == nil {
+			totalDuration += dur
+		}
+	}
+
+	if totalDuration <= 0 {
+		return 0
+	}
+
+	estBytes := int64(totalDuration * float64(targetBW+192000) / 8.0)
+	return estBytes
 }
 
 func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +426,7 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 
 		conns := req.Connections
 		if conns <= 0 {
-			conns = 16
+			conns = 32
 		}
 
 		taskID := fmt.Sprintf("task_stream_%d", time.Now().UnixNano())
@@ -308,6 +452,7 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 		s.engine.mu.Unlock()
 		s.db.SaveTask(task)
 
+		ApplyProxySettings(s.settings)
 		NotifyDownloadStarted(task.Name, task.ActiveConnections)
 		go s.executeStreamDownload(task, streamURL, formatSelector)
 
@@ -316,6 +461,7 @@ func (s *Server) handleAddTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ApplyProxySettings(s.settings)
 	task, err := s.engine.AddTask(
 		req.URL,
 		req.SuggestedName,
@@ -351,6 +497,7 @@ func (s *Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 		s.engine.PauseTask(taskID)
 		w.Write([]byte(`{"status":"paused"}`))
 	case "resume":
+		ApplyProxySettings(s.settings)
 		s.engine.ResumeTask(taskID)
 		w.Write([]byte(`{"status":"resumed"}`))
 	case "delete":
@@ -435,27 +582,61 @@ func (s *Server) handleGetStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	s.settings.DownloadDir = ResolveExistingDir(s.settings.DownloadDir)
 	if r.Method == "GET" {
+		ApplyProxySettings(s.settings)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(s.settings)
 		return
 	}
 
-	var newSettings EngineSettings
-	if err := json.NewDecoder(r.Body).Decode(&newSettings); err != nil {
+	var req struct {
+		DownloadDir        *string `json:"download_dir"`
+		DefaultConnections *int    `json:"default_connections"`
+		MaxConcurrentTasks *int    `json:"max_concurrent_tasks"`
+		AutoExtract        *bool   `json:"auto_extract"`
+		ProxyURL           *string `json:"proxy_url"`
+		ProxyFallback      *bool   `json:"proxy_fallback"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if newSettings.DownloadDir != "" {
-		safeDir := ResolveExistingDir(newSettings.DownloadDir)
+	if req.ProxyURL != nil {
+		normalizedProxy, err := NormalizeAndValidateProxyURL(*req.ProxyURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.settings.ProxyURL = normalizedProxy
+		s.db.SetSetting("proxy_url", normalizedProxy)
+	}
+	if req.ProxyFallback != nil {
+		s.settings.ProxyFallback = *req.ProxyFallback
+		if *req.ProxyFallback {
+			s.db.SetSetting("proxy_fallback", "true")
+		} else {
+			s.db.SetSetting("proxy_fallback", "false")
+		}
+	}
+
+	if req.DownloadDir != nil && *req.DownloadDir != "" {
+		safeDir := ResolveExistingDir(*req.DownloadDir)
 		s.settings.DownloadDir = safeDir
 		s.db.SetSetting("download_dir", safeDir)
 	}
-	if newSettings.DefaultConnections > 0 {
-		s.settings.DefaultConnections = newSettings.DefaultConnections
+	if req.DefaultConnections != nil && *req.DefaultConnections > 0 {
+		s.settings.DefaultConnections = *req.DefaultConnections
+		s.db.SetSetting("default_connections", strconv.Itoa(*req.DefaultConnections))
 	}
-	s.settings.AutoExtract = newSettings.AutoExtract
+	if req.MaxConcurrentTasks != nil && *req.MaxConcurrentTasks > 0 {
+		s.settings.MaxConcurrentTasks = *req.MaxConcurrentTasks
+		s.db.SetSetting("max_concurrent_tasks", strconv.Itoa(*req.MaxConcurrentTasks))
+	}
+	if req.AutoExtract != nil {
+		s.settings.AutoExtract = *req.AutoExtract
+	}
 
+	ApplyProxySettings(s.settings)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s.settings)
 }
@@ -467,6 +648,38 @@ func (s *Server) handleChooseFolder(w http.ResponseWriter, r *http.Request) {
 		s.db.SetSetting("download_dir", initialDir)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
+	// 1. Try delegating to Electron desktop app via port 6882 (native GTK dialog in Snap)
+	client := &http.Client{Timeout: 60 * time.Second}
+	reqURL := fmt.Sprintf("http://127.0.0.1:6882/choose-folder?defaultPath=%s", url.QueryEscape(initialDir))
+	if resp, err := client.Get(reqURL); err == nil && resp.StatusCode == 200 {
+		defer resp.Body.Close()
+		var res struct {
+			Cancelled bool   `json:"cancelled"`
+			Path      string `json:"path"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err == nil {
+			if !res.Cancelled && res.Path != "" {
+				safeSelected := ResolveExistingDir(res.Path)
+				s.settings.DownloadDir = safeSelected
+				s.db.SetSetting("download_dir", safeSelected)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"cancelled": false,
+					"path":      safeSelected,
+				})
+				return
+			}
+			if res.Cancelled {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"cancelled": true,
+				})
+				return
+			}
+		}
+	}
+
+	// 2. Fallback to zenity on host
 	cmd := exec.Command("zenity", "--file-selection", "--directory", "--title=Select Download Destination Folder", "--filename="+filepath.Clean(initialDir)+"/")
 	
 	env := os.Environ()
@@ -489,7 +702,6 @@ func (s *Server) handleChooseFolder(w http.ResponseWriter, r *http.Request) {
 	cmd.Env = env
 
 	out, err := cmd.Output()
-	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.Write([]byte(`{"cancelled":true}`))
 		return
@@ -548,8 +760,48 @@ func findExecutable(name string, priorityPaths ...string) string {
 			}
 		}
 	}
+	// Check bundled paths in snap
+	if snap := os.Getenv("SNAP"); snap != "" {
+		candidates := []string{
+			filepath.Join(snap, "resources", "app", "bin", name),
+			filepath.Join(snap, "bin", name),
+			filepath.Join(snap, "usr", "bin", name),
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				return c
+			}
+		}
+	}
+	// Check executable's directory
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		candidates := []string{
+			filepath.Join(execDir, "bin", name),
+			filepath.Join(execDir, name),
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				return c
+			}
+		}
+	}
+	// Check working dir /bin
+	if _, err := os.Stat(filepath.Join("bin", name)); err == nil {
+		if abs, err := filepath.Abs(filepath.Join("bin", name)); err == nil {
+			return abs
+		}
+	}
 	if p, err := exec.LookPath(name); err == nil {
 		return p
+	}
+	for _, envVar := range []string{"SNAP_REAL_HOME", "REALHOME"} {
+		if h := os.Getenv(envVar); h != "" {
+			localPath := filepath.Join(h, ".local", "bin", name)
+			if _, err := os.Stat(localPath); err == nil {
+				return localPath
+			}
+		}
 	}
 	homeDir, _ := os.UserHomeDir()
 	if homeDir != "" {
@@ -570,6 +822,17 @@ func getBundledBinDir() string {
 			return candidate
 		}
 	}
+	if snap := os.Getenv("SNAP"); snap != "" {
+		candidate := filepath.Join(snap, "resources", "app", "bin")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	if _, err := os.Stat("bin"); err == nil {
+		if abs, err := filepath.Abs("bin"); err == nil {
+			return abs
+		}
+	}
 	if _, err := os.Stat("/opt/hyperdrain/bin"); err == nil {
 		return "/opt/hyperdrain/bin"
 	}
@@ -581,6 +844,9 @@ func getYtDlpPath() string {
 	var extra []string
 	if bundled != "" {
 		extra = append(extra, filepath.Join(bundled, "yt-dlp"))
+	}
+	if snap := os.Getenv("SNAP"); snap != "" {
+		extra = append(extra, filepath.Join(snap, "resources", "app", "bin", "yt-dlp"))
 	}
 	return findExecutable("yt-dlp", extra...)
 }
@@ -620,8 +886,15 @@ func (s *Server) handleVideoInfo(w http.ResponseWriter, r *http.Request) {
 		jsArg = []string{"--js-runtimes", "node:" + nodePath}
 	}
 
-	args := append(jsArg, "-J", "--no-playlist", "--no-warnings", req.URL)
+	homeDir, _ := os.UserHomeDir()
+	cacheTmp := filepath.Join(homeDir, ".cache", "hyperdrain", "tmp")
+	os.MkdirAll(cacheTmp, 0755)
+
+	args := append(jsArg, "-J", "--no-playlist", "--no-warnings")
+	args = append(args, YtDlpProxyArgs(s.settings)...)
+	args = append(args, req.URL)
 	cmd := exec.Command(ytPath, args...)
+	cmd.Env = append(os.Environ(), "TMPDIR="+cacheTmp)
 	out, err := cmd.Output()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Extraction error: %v", err), http.StatusInternalServerError)
@@ -756,6 +1029,8 @@ func (s *Server) handleDownloadStream(w http.ResponseWriter, r *http.Request) {
 		streamURL = reFrag.ReplaceAllString(streamURL, ".m3u8")
 	}
 
+	streamURL = normalizeToMasterPlaylist(streamURL)
+
 	// 3. Auto-route known dead CDN proxies to fast working mirrors
 	if strings.Contains(streamURL, "fetch.nexabloom.top") {
 		streamURL = strings.Replace(streamURL, "fetch.nexabloom.top", "ncdn.imgnex.top", 1)
@@ -849,7 +1124,7 @@ func (s *Server) handleDownloadStream(w http.ResponseWriter, r *http.Request) {
 
 	conns := req.Connections
 	if conns <= 0 {
-		conns = 16
+		conns = 32
 	}
 
 	taskID := fmt.Sprintf("task_stream_%d", time.Now().UnixNano())
@@ -876,6 +1151,24 @@ func (s *Server) handleDownloadStream(w http.ResponseWriter, r *http.Request) {
 	s.db.SaveTask(task)
 
 	NotifyDownloadStarted(task.Name, task.ActiveConnections)
+
+	go func() {
+		ApplyProxySettings(s.settings)
+		estSize := estimateHLSStreamSize(streamURL, formatSelector, cleanReferer, cleanOrigin, req.Cookie, req.UserAgent)
+		if estSize > 10*1024*1024 {
+			task.mu.Lock()
+			updated := false
+			if task.TotalBytes <= 0 {
+				task.TotalBytes = estSize
+				log.Printf("[HyperDrain Stream] Pre-calculated exact manifest size for %s: %s (%d bytes)", task.Name, FormatBytes(estSize), estSize)
+				updated = true
+			}
+			task.mu.Unlock()
+			if updated {
+				s.db.SaveTask(task)
+			}
+		}
+	}()
 
 	go s.executeStreamDownload(task, streamURL, formatSelector)
 
@@ -1178,6 +1471,7 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 		if reFrag.MatchString(streamURL) {
 			streamURL = reFrag.ReplaceAllString(streamURL, ".m3u8")
 		}
+		streamURL = normalizeToMasterPlaylist(streamURL)
 		if strings.Contains(streamURL, "fetch.nexabloom.top") {
 			streamURL = strings.Replace(streamURL, "fetch.nexabloom.top", "ncdn.imgnex.top", 1)
 		}
@@ -1232,11 +1526,13 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 
 		var formatSort string
 		if strings.Contains(formatSelector, "1080") {
-			formatSort = "res:1080,fps,br"
+			formatSort = "res:1080,fps,vcodec:av01,acodec:opus"
 		} else if strings.Contains(formatSelector, "720") {
-			formatSort = "res:720,fps,br"
+			formatSort = "res:720,fps,vcodec:av01,acodec:opus"
 		} else if strings.Contains(formatSelector, "360") {
-			formatSort = "res:360,fps,br"
+			formatSort = "res:360,fps,vcodec:av01,acodec:opus"
+		} else {
+			formatSort = "res:1080,fps,vcodec:av01,acodec:opus"
 		}
 
 		args := append(jsArg,
@@ -1284,8 +1580,9 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 			"--file-access-retries", "5",
 			"--retry-sleep", "1",
 			"--no-check-certificates",
-			streamURL,
 		)
+		args = append(args, YtDlpProxyArgs(s.settings)...)
+		args = append(args, streamURL)
 
 		task.mu.Lock()
 		task.ErrorMessage = fmt.Sprintf("Downloading Episode %d of %d (Ep %s)...", idx+1, totalEps, epNumStr)
@@ -1298,6 +1595,7 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 		prepareProcessGroup(cmd)
 		cmd.Env = append(os.Environ(),
 			"PYTHONUNBUFFERED=1",
+			"TMPDIR="+batchStagingDir,
 			"PATH="+ffmpegDir+":"+getBundledBinDir()+":/usr/local/bin:/usr/bin:/bin:"+filepath.Join(homeDir, ".local", "bin")+":"+os.Getenv("PATH"),
 		)
 
@@ -1408,7 +1706,7 @@ func (s *Server) executeZipBatchDownload(task *DownloadTask, cleanSeriesTitle, t
 		if foundEpFile != "" {
 			if fi, err := os.Stat(foundEpFile); err == nil && fi.Size() > 100*1024 {
 				if err := MoveFile(foundEpFile, epFinalPath); err == nil {
-					ensureVideoHasAudio(epFinalPath, streamURL, cleanReferer, cleanOrigin, ep.Cookie, ep.UserAgent)
+					s.ensureVideoHasAudio(epFinalPath, streamURL, cleanReferer, cleanOrigin, ep.Cookie, ep.UserAgent)
 					completedEpsCount++
 					log.Printf("[ZIP_BATCH] Successfully completed episode %s (%s)", epNumStr, FormatBytes(fi.Size()))
 				}
@@ -1504,7 +1802,7 @@ func (s *Server) ResumeStreamTask(task *DownloadTask) {
 	task.Status = StatusDownloading
 	task.ErrorMessage = ""
 	if task.Connections <= 0 {
-		task.Connections = 16
+		task.Connections = 32
 	}
 	task.ActiveConnections = task.Connections
 	formatSelector := task.FormatID
@@ -1517,7 +1815,7 @@ func (s *Server) ResumeStreamTask(task *DownloadTask) {
 	s.executeStreamDownload(task, task.URL, formatSelector)
 }
 
-func ensureVideoHasAudio(videoPath, streamURL, referer, origin, cookie, userAgent string) bool {
+func (s *Server) ensureVideoHasAudio(videoPath, streamURL, referer, origin, cookie, userAgent string) bool {
 	if fi, err := os.Stat(videoPath); err != nil || fi.Size() < 50*1024 {
 		return false
 	}
@@ -1525,81 +1823,192 @@ func ensureVideoHasAudio(videoPath, streamURL, referer, origin, cookie, userAgen
 	if _, err := os.Stat(ffprobePath); err != nil {
 		ffprobePath = findExecutable("ffprobe")
 	}
-	probeCmd := exec.Command(ffprobePath, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", videoPath)
-	probeOut, err := probeCmd.Output()
-	if err == nil && strings.TrimSpace(string(probeOut)) == "audio" {
+
+	// 1. Probe for video track
+	probeVideo := exec.Command(ffprobePath, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", videoPath)
+	outV, errV := probeVideo.Output()
+	hasVideo := errV == nil && strings.TrimSpace(string(outV)) == "video"
+
+	// 2. Probe for audio track
+	probeAudio := exec.Command(ffprobePath, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", videoPath)
+	outA, errA := probeAudio.Output()
+	hasAudio := errA == nil && strings.TrimSpace(string(outA)) == "audio"
+
+	if hasVideo && hasAudio {
 		return true
 	}
 
-	log.Printf("[STREAM_AUDIO] Video '%s' has NO audio track! Attempting separate audio recovery from '%s'...", filepath.Base(videoPath), streamURL)
+	masterURL := normalizeToMasterPlaylist(streamURL)
 	ytPath := getYtDlpPath()
 	ffmpegPath := getFfmpegPath()
+	ffmpegDir := filepath.Dir(ffmpegPath)
 
-	tempAudio := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_audio_%d.mp4", time.Now().UnixNano()))
-	defer os.Remove(tempAudio)
+	homeDir, _ := os.UserHomeDir()
+	cacheTmp := filepath.Join(homeDir, ".cache", "hyperdrain", "tmp")
+	os.MkdirAll(cacheTmp, 0755)
 
-	audioArgs := []string{
-		"-f", "bestaudio/ba/aud-English/aud-Japanese/audio",
-		"--no-playlist",
-		"--ffmpeg-location", filepath.Dir(ffmpegPath),
-		"-o", tempAudio,
-		"--no-check-certificates",
-	}
-	if referer != "" {
-		audioArgs = append(audioArgs, "--referer", referer)
-	}
-	if origin != "" {
-		audioArgs = append(audioArgs, "--add-header", "Origin: "+origin)
-	}
-	if userAgent != "" {
-		audioArgs = append(audioArgs, "--user-agent", userAgent)
-	}
-	if cookie != "" {
-		audioArgs = append(audioArgs, "--add-header", "Cookie: "+cookie)
-	}
-	audioArgs = append(audioArgs, streamURL)
+	if hasVideo && !hasAudio {
+		log.Printf("[STREAM_AUDIO] Video '%s' has NO audio track! Attempting separate audio recovery from '%s'...", filepath.Base(videoPath), masterURL)
+		tempAudio := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_audio_%d.mp4", time.Now().UnixNano()))
+		defer os.Remove(tempAudio)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	cmdDl := exec.CommandContext(ctx, ytPath, audioArgs...)
-	if err := cmdDl.Run(); err != nil {
-		log.Printf("[STREAM_AUDIO] Separate audio download failed: %v", err)
-		return false
-	}
-
-	if fi, err := os.Stat(tempAudio); err != nil || fi.Size() < 10*1024 {
-		log.Printf("[STREAM_AUDIO] Downloaded audio is missing or empty")
-		return false
-	}
-
-	tempMerged := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_merged_%d.mp4", time.Now().UnixNano()))
-	defer os.Remove(tempMerged)
-
-	muxCmd := exec.Command(ffmpegPath, "-y",
-		"-i", videoPath,
-		"-i", tempAudio,
-		"-c", "copy",
-		"-map", "0:v:0",
-		"-map", "1:a:0",
-		"-movflags", "+faststart",
-		tempMerged,
-	)
-	if err := muxCmd.Run(); err != nil {
-		log.Printf("[STREAM_AUDIO] Muxing video and audio failed: %v", err)
-		return false
-	}
-
-	if fi, err := os.Stat(tempMerged); err == nil && fi.Size() > 100*1024 {
-		if err := MoveFile(tempMerged, videoPath); err == nil {
-			log.Printf("[STREAM_AUDIO] Successfully injected audio track into '%s'!", filepath.Base(videoPath))
-			return true
+		audioArgs := []string{
+			"-f", "bestaudio/ba/aud-English/aud-Japanese/audio",
+			"--no-playlist",
+			"--ffmpeg-location", ffmpegDir,
+			"-o", tempAudio,
+			"--no-check-certificates",
 		}
+		if referer != "" {
+			audioArgs = append(audioArgs, "--referer", referer)
+		}
+		if origin != "" {
+			audioArgs = append(audioArgs, "--add-header", "Origin: "+origin)
+		}
+		if userAgent != "" {
+			audioArgs = append(audioArgs, "--user-agent", userAgent)
+		}
+		if cookie != "" {
+			audioArgs = append(audioArgs, "--add-header", "Cookie: "+cookie)
+		}
+		audioArgs = append(audioArgs, YtDlpProxyArgs(s.settings)...)
+		audioArgs = append(audioArgs, masterURL)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		cmdDl := exec.CommandContext(ctx, ytPath, audioArgs...)
+		cmdDl.Env = append(os.Environ(), "TMPDIR="+cacheTmp, "PATH="+ffmpegDir+":/usr/bin:/bin")
+		if err := cmdDl.Run(); err != nil {
+			log.Printf("[STREAM_AUDIO] Separate audio download failed: %v", err)
+			return false
+		}
+
+		if fi, err := os.Stat(tempAudio); err != nil || fi.Size() < 10*1024 {
+			log.Printf("[STREAM_AUDIO] Downloaded audio is missing or empty")
+			return false
+		}
+
+		tempMerged := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_merged_%d.mp4", time.Now().UnixNano()))
+		defer os.Remove(tempMerged)
+
+		muxCmd := exec.Command(ffmpegPath, "-y",
+			"-i", videoPath,
+			"-i", tempAudio,
+			"-c", "copy",
+			"-map", "0:v:0",
+			"-map", "1:a:0",
+			"-movflags", "+faststart",
+			tempMerged,
+		)
+		if err := muxCmd.Run(); err != nil {
+			log.Printf("[STREAM_AUDIO] Muxing video and audio failed: %v", err)
+			return false
+		}
+
+		if fi, err := os.Stat(tempMerged); err == nil && fi.Size() > 100*1024 {
+			if err := MoveFile(tempMerged, videoPath); err == nil {
+				log.Printf("[STREAM_AUDIO] Successfully injected audio track into '%s'!", filepath.Base(videoPath))
+				return true
+			}
+		}
+		return false
 	}
+
+	if !hasVideo && hasAudio {
+		log.Printf("[STREAM_VIDEO] File '%s' has audio but NO video track! Attempting separate video recovery from '%s'...", filepath.Base(videoPath), masterURL)
+		tempVideo := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_video_%d.mp4", time.Now().UnixNano()))
+		defer os.Remove(tempVideo)
+
+		videoArgs := []string{
+			"-f", "bestvideo/bv/5300/3000/1500/900/best",
+			"--no-playlist",
+			"--ffmpeg-location", ffmpegDir,
+			"-o", tempVideo,
+			"--no-check-certificates",
+		}
+		if referer != "" {
+			videoArgs = append(videoArgs, "--referer", referer)
+		}
+		if origin != "" {
+			videoArgs = append(videoArgs, "--add-header", "Origin: "+origin)
+		}
+		if userAgent != "" {
+			videoArgs = append(videoArgs, "--user-agent", userAgent)
+		}
+		if cookie != "" {
+			videoArgs = append(videoArgs, "--add-header", "Cookie: "+cookie)
+		}
+		videoArgs = append(videoArgs, YtDlpProxyArgs(s.settings)...)
+		videoArgs = append(videoArgs, masterURL)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+
+		cmdDl := exec.CommandContext(ctx, ytPath, videoArgs...)
+		cmdDl.Env = append(os.Environ(), "TMPDIR="+cacheTmp, "PATH="+ffmpegDir+":/usr/bin:/bin")
+		if err := cmdDl.Run(); err != nil {
+			log.Printf("[STREAM_VIDEO] Separate video download failed: %v", err)
+			return false
+		}
+
+		if fi, err := os.Stat(tempVideo); err != nil || fi.Size() < 50*1024 {
+			log.Printf("[STREAM_VIDEO] Downloaded video is missing or empty")
+			return false
+		}
+
+		tempMerged := filepath.Join(filepath.Dir(videoPath), fmt.Sprintf("temp_merged_%d.mp4", time.Now().UnixNano()))
+		defer os.Remove(tempMerged)
+
+		muxCmd := exec.Command(ffmpegPath, "-y",
+			"-i", tempVideo,
+			"-i", videoPath,
+			"-c", "copy",
+			"-map", "0:v:0",
+			"-map", "1:a:0",
+			"-movflags", "+faststart",
+			tempMerged,
+		)
+		if err := muxCmd.Run(); err != nil {
+			log.Printf("[STREAM_VIDEO] Muxing video and audio failed: %v", err)
+			return false
+		}
+
+		if fi, err := os.Stat(tempMerged); err == nil && fi.Size() > 100*1024 {
+			if err := MoveFile(tempMerged, videoPath); err == nil {
+				log.Printf("[STREAM_VIDEO] Successfully injected video track into '%s'!", filepath.Base(videoPath))
+				return true
+			}
+		}
+		return false
+	}
+
 	return false
 }
 
+var reMp4M3U8Suffix = regexp.MustCompile(`(?i)^(.+\.(?:mp4|m4s))\.m3u8(\?.*)?$`)
+
+func m3u8FallbackCandidates(streamURL string) []string {
+	m := reMp4M3U8Suffix.FindStringSubmatch(streamURL)
+	if len(m) == 0 {
+		return nil
+	}
+	base := m[1]
+	query := m[2]
+	return []string{
+		base + "/index-v1-a1.m3u8" + query,
+		base + "/index.m3u8" + query,
+		base + "/master.m3u8" + query,
+	}
+}
+
 func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSelector string) {
+	s.executeStreamDownloadAttempt(task, streamURL, formatSelector, true)
+}
+
+func (s *Server) executeStreamDownloadAttempt(task *DownloadTask, streamURL, formatSelector string, allowFallback bool) {
+	streamURL = normalizeToMasterPlaylist(streamURL)
+	task.URL = streamURL
 	if strings.Contains(streamURL, "fetch.nexabloom.top") {
 		streamURL = strings.Replace(streamURL, "fetch.nexabloom.top", "ncdn.imgnex.top", 1)
 		task.URL = streamURL
@@ -1624,16 +2033,18 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 
 	conns := task.Connections
 	if conns <= 0 {
-		conns = 16
+		conns = 32
 	}
 
 	var formatSort string
 	if strings.Contains(formatSelector, "1080") {
-		formatSort = "res:1080,fps,br"
+		formatSort = "res:1080,fps,vcodec:av01,acodec:opus"
 	} else if strings.Contains(formatSelector, "720") {
-		formatSort = "res:720,fps,br"
+		formatSort = "res:720,fps,vcodec:av01,acodec:opus"
 	} else if strings.Contains(formatSelector, "360") {
-		formatSort = "res:360,fps,br"
+		formatSort = "res:360,fps,vcodec:av01,acodec:opus"
+	} else {
+		formatSort = "res:1080,fps,vcodec:av01,acodec:opus"
 	}
 
 	args := append(jsArg,
@@ -1708,18 +2119,25 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 		"--file-access-retries", "5",
 		"--retry-sleep", "1",
 		"--no-check-certificates",
-		streamURL,
 	)
+	args = append(args, YtDlpProxyArgs(s.settings)...)
+	args = append(args, streamURL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, ytPath, args...)
 	prepareProcessGroup(cmd)
 	cmd.Env = append(os.Environ(),
 		"PYTHONUNBUFFERED=1",
+		"TMPDIR="+stagingDir,
 		"PATH="+ffmpegDir+":"+getBundledBinDir()+":/usr/local/bin:/usr/bin:/bin:"+filepath.Join(homeDir, ".local", "bin")+":"+os.Getenv("PATH"),
 	)
 
 	task.mu.Lock()
+	if task.Status == StatusPaused {
+		task.mu.Unlock()
+		cancel()
+		return
+	}
 	task.cancel = func() {
 		cancel()
 		if cmd.Process != nil {
@@ -1729,7 +2147,9 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 	task.Status = StatusDownloading
 	task.ActiveConnections = conns
 	task.mu.Unlock()
-	NotifyDownloadStarted(task.Name, task.ActiveConnections)
+	if allowFallback {
+		NotifyDownloadStarted(task.Name, task.ActiveConnections)
+	}
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
@@ -1745,7 +2165,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			scanner := bufio.NewScanner(stdout)
 			for scanner.Scan() {
 				line := scanner.Text()
-				if strings.HasPrefix(line, "ERROR:") || strings.Contains(line, "fragment not found") || strings.Contains(line, "HTTP Error 404") || strings.Contains(line, "HTTP Error 403") {
+				if strings.HasPrefix(line, "ERROR:") || strings.Contains(line, "fragment not found") || strings.Contains(line, "HTTP Error 404") || strings.Contains(line, "HTTP Error 403") || strings.Contains(line, "HTTP Error 410") {
 					lastErrText = line
 				}
 				if strings.HasPrefix(line, "HD_PROG:") {
@@ -1847,11 +2267,11 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 						} else if fragIndex > 0 && fragCount > 0 {
 							// For HLS/DASH fragments: dynamically calculate real total file size!
 							calcTotal := baseDownloaded + (currentDl*fragCount)/fragIndex
-							if calcTotal > 10*1024*1024 || fragIndex > 5 {
-								if task.TotalBytes <= 0 || task.TotalBytes < 10*1024*1024 {
+							if calcTotal > 10*1024*1024 {
+								if task.TotalBytes <= 0 {
 									task.TotalBytes = calcTotal
 								} else {
-									task.TotalBytes = int64(0.75*float64(task.TotalBytes) + 0.25*float64(calcTotal))
+									task.TotalBytes = int64(0.85*float64(task.TotalBytes) + 0.15*float64(calcTotal))
 								}
 							}
 						}
@@ -1957,7 +2377,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			if err := MoveFile(completedFile, destFile); err == nil {
 				task.TargetFile = destFile
 				task.Name = cleanEntryName
-				ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
+				s.ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
 				if fi, err := os.Stat(destFile); err == nil {
 					task.TotalBytes = fi.Size()
 					task.DownloadedBytes = fi.Size()
@@ -1966,7 +2386,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			} else {
 				log.Printf("[STREAM] MoveFile failed: %v, keeping file at %s", err, completedFile)
 				task.TargetFile = completedFile
-				ensureVideoHasAudio(completedFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
+				s.ensureVideoHasAudio(completedFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
 				if fi, err := os.Stat(completedFile); err == nil {
 					task.TotalBytes = fi.Size()
 					task.DownloadedBytes = fi.Size()
@@ -1978,7 +2398,7 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 		} else {
 			task.TargetFile = destFile
 			task.Name = cleanEntryName
-			ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
+			s.ensureVideoHasAudio(destFile, task.URL, task.Referer, task.Origin, task.Cookie, task.UserAgent)
 			if fi, err := os.Stat(destFile); err == nil {
 				task.TotalBytes = fi.Size()
 				task.DownloadedBytes = fi.Size()
@@ -2002,7 +2422,6 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 			NotifyDownloadStopped(task.Name, task.ErrorMessage)
 		}
 	} else {
-		task.Status = StatusError
 		errMsg := strings.TrimSpace(stderrBuf.String())
 		if errMsg == "" && lastErrText != "" {
 			errMsg = lastErrText
@@ -2010,6 +2429,28 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 		if errMsg == "" {
 			errMsg = runErr.Error()
 		}
+		if allowFallback && (strings.Contains(errMsg, "HTTP Error 410") || strings.Contains(errMsg, "HTTP Error 404")) {
+			candidates := m3u8FallbackCandidates(streamURL)
+			if len(candidates) > 0 {
+				task.mu.Unlock()
+				for _, altURL := range candidates {
+					log.Printf("[STREAM] Playlist returned 404/410 for %s, retrying fallback: %s", streamURL, altURL)
+					s.executeStreamDownloadAttempt(task, altURL, formatSelector, false)
+					task.mu.Lock()
+					st := task.Status
+					lastAttemptErr := task.ErrorMessage
+					task.mu.Unlock()
+					if st == StatusCompleted || st == StatusPaused || ctx.Err() == context.Canceled {
+						return
+					}
+					if !strings.Contains(lastAttemptErr, "404") && !strings.Contains(lastAttemptErr, "410") && !strings.Contains(lastAttemptErr, "expired") {
+						return
+					}
+				}
+				return
+			}
+		}
+		task.Status = StatusError
 		if strings.Contains(errMsg, "Deprecated Feature:") {
 			lines := strings.Split(errMsg, "\n")
 			var filtered []string
@@ -2022,8 +2463,8 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 		}
 		if strings.Contains(errMsg, "Read timed out") {
 			errMsg = "Connection timed out to video server. Please click Retry."
-		} else if strings.Contains(errMsg, "HTTP Error 404") || strings.Contains(errMsg, "fragment not found") || strings.Contains(errMsg, "unable to continue") {
-			errMsg = "Video stream link expired. Please refresh the episode page and click Download."
+		} else if strings.Contains(errMsg, "HTTP Error 404") || strings.Contains(errMsg, "HTTP Error 410") || strings.Contains(errMsg, "fragment not found") || strings.Contains(errMsg, "unable to continue") {
+			errMsg = "Video stream link expired (410/404). Please refresh the video page and click Download."
 		} else if strings.Contains(errMsg, "HTTP Error 403") {
 			errMsg = "Access forbidden (403). Please refresh the episode page."
 		}
@@ -2036,5 +2477,110 @@ func (s *Server) executeStreamDownload(task *DownloadTask, streamURL, formatSele
 	task.mu.Unlock()
 	s.db.SaveTask(task)
 }
+
+func resolveExtensionDir() string {
+	var candidates []string
+
+	// 1. Check current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, "extension"))
+	}
+
+	// 2. Check relative to executable location
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "extension"),
+			filepath.Join(exeDir, "..", "extension"),
+			filepath.Join(exeDir, "..", "resources", "app", "extension"),
+			filepath.Join(exeDir, "resources", "app", "extension"),
+		)
+	}
+
+	// 3. Check SNAP environment if present
+	if snap := os.Getenv("SNAP"); snap != "" {
+		candidates = append(candidates,
+			filepath.Join(snap, "resources", "app", "extension"),
+			filepath.Join(snap, "extension"),
+		)
+	}
+
+	// 4. Fallback system, downloads, and development locations
+	if home := os.Getenv("HOME"); home != "" {
+		candidates = append(candidates, filepath.Join(home, "Downloads", "HyperDrain-Extension"))
+	}
+	candidates = append(candidates,
+		"/opt/hyperdrain/resources/app/extension",
+		"/opt/hyperdrain/extension",
+		"/run/media/hamza/Disk D/downloader/extension",
+	)
+
+	for _, c := range candidates {
+		if stat, err := os.Stat(filepath.Join(c, "manifest.json")); err == nil && !stat.IsDir() {
+			return c
+		}
+	}
+	return "extension"
+}
+
+func (s *Server) handleExportExtensionZip(w http.ResponseWriter, r *http.Request) {
+	extDir := resolveExtensionDir()
+	manifestPath := filepath.Join(extDir, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		http.Error(w, "Extension directory not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"HyperDrain-Browser-Extension.zip\"")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	err := filepath.Walk(extDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		// Skip git files or hidden temp files
+		if strings.Contains(path, ".git") {
+			return nil
+		}
+		relPath, err := filepath.Rel(extDir, path)
+		if err != nil {
+			return err
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		header.Method = zip.Deflate
+
+		writer, err := zw.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		return err
+	})
+
+	if err != nil {
+		log.Printf("[SERVER] Error zipping extension: %v", err)
+	}
+}
+
 
 

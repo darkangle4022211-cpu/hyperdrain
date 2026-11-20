@@ -9,11 +9,11 @@
     "email": "hamza.zafar4022211@gmail.com"
   },
   "platforms": {
-    "linux-deb-x64": {
-      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb",
-      "sha256": "4db1411c59785c134f032a5d2b3c39f0f4f382c0963868b437854119a0ea164d",
-      "size": 133004042,
-      "filename": "hyperdrain_1.0.9_amd64.deb"
+    "linux-appimage-x64": {
+      "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/HyperDrain-1.0.9.AppImage",
+      "sha256": "",
+      "size": 0,
+      "filename": "HyperDrain-1.0.9.AppImage"
     },
     "windows-x64": {
       "url": "https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/HyperDrain-Setup-1.0.9.exe",

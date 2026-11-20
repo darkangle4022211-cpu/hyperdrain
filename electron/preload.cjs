@@ -16,11 +16,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Native Dialogs & System Explorer
   chooseFolder: (defaultPath) => ipcRenderer.invoke('choose-folder', defaultPath),
   openPath: (targetPath) => ipcRenderer.invoke('open-path', targetPath),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
 
   // Browser Extension Helpers
   openExtensionFolder: () => ipcRenderer.invoke('open-extension-folder'),
   exportExtensionZip: () => ipcRenderer.invoke('export-extension-zip'),
+  detectBrowsers: () => ipcRenderer.invoke('detect-browsers'),
+  connectBrowser: (browserId) => ipcRenderer.invoke('connect-browser', browserId),
+  copyExtensionPath: () => ipcRenderer.invoke('copy-extension-path'),
 
   // Native Notifications
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
@@ -34,5 +38,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onUpdateAvailableDetected: (callback) => {
     ipcRenderer.on('update-available-detected', (_event, data) => callback(data));
+  },
+
+  // Built-in Safe Browser Shield & Redirect Tracking
+  getWebviewPreloadPath: () => ipcRenderer.invoke('get-webview-preload-path'),
+  ensureBrowserShield: () => ipcRenderer.invoke('ensure-browser-shield'),
+  setBrowserShield: (enabled) => ipcRenderer.invoke('set-browser-shield', enabled),
+  setBrowserEco: (enabled) => ipcRenderer.invoke('set-browser-eco', enabled),
+  getBrowserEco: () => ipcRenderer.invoke('get-browser-eco'),
+  getBrowserShieldStats: () => ipcRenderer.invoke('get-browser-shield-stats'),
+  resetBrowserShieldStats: () => ipcRenderer.invoke('reset-browser-shield-stats'),
+  resolveSiteRedirect: (url) => ipcRenderer.invoke('resolve-site-redirect', url),
+  syncBrowserProxy: () => ipcRenderer.invoke('sync-browser-proxy'),
+  clearBrowserSessionData: () => ipcRenderer.invoke('clear-browser-session-data'),
+  onBrowserDownloadCaptured: (callback) => {
+    ipcRenderer.on('browser-download-captured', (_event, data) => callback(data));
+  },
+  onBrowserPopupBlocked: (callback) => {
+    ipcRenderer.on('browser-popup-blocked', (_event, data) => callback(data));
+  },
+  onBrowserShieldStats: (callback) => {
+    ipcRenderer.on('browser-shield-stats', (_event, data) => callback(data));
+  },
+  onBrowserMediaSniffed: (callback) => {
+    ipcRenderer.on('browser-media-sniffed', (_event, data) => callback(data));
   }
 });

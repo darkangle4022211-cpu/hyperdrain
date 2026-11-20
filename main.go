@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,7 +59,21 @@ func main() {
 		MaxConcurrentTasks: 2,
 		AutoExtract:        false,
 		AuthToken:          DefaultToken,
+		ProxyFallback:      true,
 	}
+	if savedConns, err := strconv.Atoi(db.GetSetting("default_connections", "")); err == nil && savedConns > 0 {
+		settings.DefaultConnections = savedConns
+	}
+	if savedMaxTasks, err := strconv.Atoi(db.GetSetting("max_concurrent_tasks", "")); err == nil && savedMaxTasks > 0 {
+		settings.MaxConcurrentTasks = savedMaxTasks
+	}
+	if normalizedProxy, err := engine.NormalizeAndValidateProxyURL(db.GetSetting("proxy_url", "")); err == nil {
+		settings.ProxyURL = normalizedProxy
+	}
+	if pf := db.GetSetting("proxy_fallback", ""); pf != "" {
+		settings.ProxyFallback = pf == "true" || pf == "1"
+	}
+	engine.ApplyProxySettings(settings)
 	savedDir := db.GetSetting("download_dir", "")
 	if savedDir != "" {
 		healedDir := resolveExistingDir(savedDir, downloadDir)

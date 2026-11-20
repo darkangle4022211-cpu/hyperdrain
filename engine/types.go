@@ -67,6 +67,9 @@ type EngineSettings struct {
 	MaxConcurrentTasks int    `json:"max_concurrent_tasks"`
 	AutoExtract        bool   `json:"auto_extract"`
 	AuthToken          string `json:"auth_token"`
+	ProxyURL           string `json:"proxy_url"`
+	ProxyFallback      bool   `json:"proxy_fallback"`
+	EffectiveProxyURL  string `json:"effective_proxy_url,omitempty"`
 }
 
 type TelemetryMessage struct {

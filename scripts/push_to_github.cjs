@@ -57,6 +57,7 @@ const fileList = [
   'assets/hyperdrain.png',
   'electron/main.cjs',
   'electron/preload.cjs',
+  'electron/webview_preload.cjs',
   'engine/allocator_linux.go',
   'engine/allocator_windows.go',
   'engine/db.go',
@@ -66,7 +67,10 @@ const fileList = [
   'engine/notify.go',
   'engine/proc_unix.go',
   'engine/proc_windows.go',
+  'engine/proxy.go',
   'engine/server.go',
+  'engine/server_proxy_test.go',
+  'engine/stream_video_test.go',
   'engine/torrent.go',
   'engine/types.go',
   'extension/background.js',
@@ -87,11 +91,14 @@ const fileList = [
   'main.go',
   'package.json',
   'README.md',
-  'scripts/build_deb.sh',
+  'scripts/build_appimage.sh',
+  'scripts/build_appx.py',
   'scripts/build_engine.sh',
   'scripts/build_release.sh',
   'scripts/push_to_github.cjs',
+  'scripts/qa_package_verifier.py',
   'scripts/qa_runner.cjs',
+  'scripts/upload_appimage.py',
   'scripts/upload_release_asset.cjs',
   'signal_unix.go',
   'signal_windows.go',
@@ -156,7 +163,7 @@ async function run() {
   console.log('Tree created:', treeSha);
 
   // 4. Create Commit
-  const commitMsg = `Release v${pkgVersion}: IDM-style mini popup window, Linux background system tray daemon, and auto-start integration`;
+  const commitMsg = process.argv[2] || `Update HyperDrain v${pkgVersion}: protected browser, ad shield, eco mode, domain takeover & DPI proxy sync`;
   const commitRes = await ghReq('POST', `/repos/${owner}/${repo}/git/commits`, {
     message: commitMsg,
     tree: treeSha,

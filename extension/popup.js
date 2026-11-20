@@ -6,8 +6,6 @@ const statusText = document.getElementById("status-text");
 const speedVal = document.getElementById("speed-val");
 const tasksVal = document.getElementById("tasks-val");
 const tasksList = document.getElementById("tasks-list");
-const urlInput = document.getElementById("url-input");
-const addBtn = document.getElementById("add-btn");
 const openDashboardBtn = document.getElementById("open-dashboard-btn");
 
 function formatBytes(bytes) {
@@ -129,37 +127,6 @@ async function refreshData() {
     tasksList.innerHTML = `<div class="empty-state">Go engine offline. Launch HyperDrain core to connect.</div>`;
   }
 }
-
-addBtn.addEventListener("click", async () => {
-  const url = urlInput.value.trim();
-  if (!url) return;
-
-  try {
-    addBtn.disabled = true;
-    const res = await fetch(`${CORE_API}/api/tasks/add`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-HyperDrain-Token": AUTH_TOKEN
-      },
-      body: JSON.stringify({ url: url })
-    });
-    if (res.ok) {
-      urlInput.value = "";
-      refreshData();
-    } else {
-      alert("Failed to add download. Code: " + res.status);
-    }
-  } catch (err) {
-    alert("Could not reach HyperDrain engine at 127.0.0.1:6880");
-  } finally {
-    addBtn.disabled = false;
-  }
-});
-
-urlInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") addBtn.click();
-});
 
 openDashboardBtn.addEventListener("click", () => {
   const inIncog = Boolean(chrome.extension?.inIncognitoContext);
