@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HyperDrain — 32-Stream Resilient Desktop Downloader</title>
+  <meta name="description" content="HyperDrain is a Go + Electron desktop download manager built for massive files and flaky connections, featuring 32 parallel WriteAt streams, fallocate pre-allocation, and SQLite WAL recovery.">
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111315" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="./assets/icons/hyperdrain.png">
+  <!-- Preconnect to GitHub release CDN so installer downloads start immediately on click -->
+  <link rel="preconnect" href="https://github.com" crossorigin>
+  <link rel="preconnect" href="https://objects.githubusercontent.com" crossorigin>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="HyperDrain Home">
+        <img src="./assets/icons/hyperdrain.png" alt="" width="28" height="28" decoding="async">
+        <span class="brand-name">HyperDrain</span>
+        <span class="version-pill">v1.0.9</span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#install">Download</a>
+        <a href="#architecture">How it works</a>
+        <a href="#projects">More software</a>
+        <a href="https://github.com/darkangle4022211-cpu/hyperdrain" target="_blank" rel="noopener noreferrer">Source</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="top" class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Linux Desktop Utility · Go Engine + Electron Shell</p>
+          <h1>Fast, crash-proof downloads for large files on unstable connections.</h1>
+          <p class="lead">
+            HyperDrain splits transfers across up to 32 parallel HTTP streams, reserves disk space up front with
+            <code>fallocate</code>, and checkpoints byte offsets in SQLite WAL every second—so a dropped Wi-Fi link or power cut never wastes a 30&nbsp;GB download.
+          </p>
+
+          <div id="install" class="download-box">
+            <div class="download-actions">
+              <a
+                class="btn-primary"
+                href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb"
+                download="hyperdrain_1.0.9_amd64.deb"
+              >
+                Download .deb for Ubuntu / Debian
+                <span class="btn-meta">v1.0.9 · 126.8 MB · x64</span>
+              </a>
+              <a
+                class="btn-secondary"
+                href="https://github.com/darkangle4022211-cpu/hyperdrain/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                All releases (9)
+              </a>
+            </div>
+
+            <div class="terminal-install">
+              <div class="terminal-head">
+                <span>Or install in one command on Ubuntu / Debian</span>
+                <button type="button" class="copy-btn" data-copy-target="apt-cmd">Copy</button>
+              </div>
+              <pre><code id="apt-cmd">curl -fsSL https://github.com/darkangle4022211-cpu/hyperdrain/releases/download/v1.0.9/hyperdrain_1.0.9_amd64.deb -o /tmp/hyperdrain.deb &amp;&amp; sudo apt install -y /tmp/hyperdrain.deb</code></pre>
+            </div>
+
+            <p class="cdn-note">
+              <strong>Note on download speed:</strong> This first installer download comes directly from GitHub's global CDN (<code>objects.githubusercontent.com</code>) via your browser. Once HyperDrain and its Manifest V3 extension are installed, your future downloads automatically hand off to HyperDrain's 32-stream Go engine.
+            </p>
+          </div>
+        </div>
+
+        <figure class="hero-shot">
+          <img
+            src="./assets/screenshots/hyperdrain-ui.png"
+            alt="HyperDrain desktop dashboard showing active download progress, 32-way stream segments, and real-time throughput graph"
+            width="2560"
+            height="1600"
+            decoding="async"
+            fetchpriority="high"
+          >
+          <figcaption>HyperDrain v1.0.9 running locally: 60s throughput telemetry, 32-way stream map, and pause/resume queue.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="specs" aria-label="Technical specifications">
+      <div class="container">
+        <dl class="spec-strip">
+          <div class="spec-item">
+            <dt>Parallelism</dt>
+            <dd>Up to 32 concurrent streams with <code>WriteAt</code></dd>
+          </div>
+          <div class="spec-item">
+            <dt>Disk I/O</dt>
+            <dd><code>fallocate</code> pre-allocation (0 file joining)</dd>
+          </div>
+          <div class="spec-item">
+            <dt>Recovery</dt>
+            <dd>10s zombie socket watchdog + SQLite WAL</dd>
+          </div>
+          <div class="spec-item">
+            <dt>License</dt>
+            <dd>MIT Open Source · No telemetry</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="architecture" class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2>Built for real-world network failures</h2>
+          <p>Why a native Go engine beats standard single-stream browser downloads on large files.</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>32-stream chunk engine</h3>
+            <p>
+              The Go backend opens up to 32 HTTP/2 connections per task and writes chunks directly to their final byte offsets via positional <code>pwrite</code> / <code>WriteAt</code>—eliminating slow post-download file merging.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <h3>Zombie stream watchdog</h3>
+            <p>
+              Stalled sockets are detected within 10 seconds and respawned at the exact interrupted byte range, with exponential jitter backoff for HTTP 429 and 503 responses.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <h3>Browser extension + built-in sniffer</h3>
+            <p>
+              Includes a 1-click exportable Manifest V3 extension (Chrome, Brave, Edge, Firefox) that forwards cookies, <code>Referer</code>, and <code>User-Agent</code> headers, plus an embedded media sniffer for <code>.m3u8</code> and <code>.mp4</code> streams.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <h3>Auto-extract &amp; tray mode</h3>
+            <p>
+              Streams multi-gigabyte ZIP/RAR archives on completion, wakes via <code>hyperdrain://wake</code> deep links, and stays quiet in the system tray with an IDM-style 480&times;250 mini progress window.
+            </p>
+          </article>
+        </div>
+
+        <div class="release-notes">
+          <div class="release-notes-head">
+            <h3>What changed in v1.0.9</h3>
+            <a href="https://github.com/darkangle4022211-cpu/hyperdrain/releases/tag/v1.0.9" target="_blank" rel="noopener noreferrer">View tag on GitHub &rarr;</a>
+          </div>
+          <ul>
+            <li>IDM-style frameless 480&times;250 mini download popup with live speed, ETA, and folder reveal.</li>
+            <li>Silent system tray mode that keeps the 32-stream Go engine running when the main window closes.</li>
+            <li>Auto-start registration on login and <code>hyperdrain://wake</code> deep-link handoff from browsers.</li>
+            <li>Online self-update manifest support via <code>update.json</code> with zero changes to core engine throughput.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="projects" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <h2>Other Desktop Apps by Hamza Zafar</h2>
+          <p>Packaged Linux and Windows desktop software built and maintained in the same ecosystem.</p>
+        </div>
+
+        <div class="project-grid">
+          <article class="project-card">
+            <div class="project-shot">
+              <img
+                src="./assets/screenshots/pulsar-ui.png"
+                alt="Pulsar Audio offline music player desktop library interface"
+                width="2560"
+                height="1600"
+              >
+            </div>
+            <div class="project-body">
+              <div class="project-title-row">
+                <div class="project-title-left">
+                  <img src="./assets/icons/pulsar.png" alt="" width="24" height="24" loading="lazy" decoding="async">
+                  <h3>Pulsar Audio</h3>
+                </div>
+                <span class="tag">v1.1.15</span>
+              </div>
+              <p>
+                Offline MP3/FLAC/WAV desktop music player with custom playlists, a 10-band graphic equalizer, ID3 cover art parsing, MPRIS desktop integration, and a 60fps Web Audio visualizer.
+              </p>
+              <div class="project-links">
+                <a href="https://github.com/darkangle4022211-cpu/pulser-audio/releases/download/v1.1.15/pulsar-music-player_1.1.15_amd64.snap" download>Linux .snap (90.6 MB)</a>
+                <a href="https://github.com/darkangle4022211-cpu/pulser-audio/releases/download/v1.1.15/Pulsar.Music.Player.1.1.15.appx" download>Windows .appx</a>
+                <a href="https://github.com/darkangle4022211-cpu/pulser-audio" target="_blank" rel="noopener noreferrer">Repo</a>
+              </div>
+            </div>
+          </article>
+
+          <article class="project-card">
+            <div class="project-shot">
+              <img
+                src="./assets/screenshots/pulserelease-ui.png"
+                alt="PulseRelease desktop release console showing drag-and-drop binary staging and SHA-256 manifest generation"
+                width="2560"
+                height="1600"
+              >
+            </div>
+            <div class="project-body">
+              <div class="project-title-row">
+                <div class="project-title-left">
+                  <img src="./assets/icons/pulserelease.png" alt="" width="24" height="24" loading="lazy" decoding="async">
+                  <h3>PulseRelease</h3>
+                </div>
+                <span class="tag">v1.0.9</span>
+              </div>
+              <p>
+                Desktop release console and language-agnostic auto-updater. Drag and drop <code>.deb</code>, <code>.AppImage</code>, <code>.exe</code>, or <code>.apk</code> artifacts to hash with Web Crypto SHA-256, publish to GitHub Releases, and generate <code>update.json</code>.
+              </p>
+              <div class="project-links">
+                <a href="https://github.com/darkangle4022211-cpu/pluserelease/releases/download/v1.0.9/pulse-release_1.0.9_amd64.deb" download>Linux .deb (100.4 MB)</a>
+                <a href="https://github.com/darkangle4022211-cpu/pluserelease" target="_blank" rel="noopener noreferrer">Repo</a>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>Hamza Zafar</strong> · Desktop &amp; Web Software Builder
+        <p class="footer-sub">Available for custom Electron utilities, web apps, and Linux/Windows packaging.</p>
+      </div>
+      <div class="footer-links">
+        <a href="mailto:hamza.zafar4022211@gmail.com">hamza.zafar4022211@gmail.com</a>
+        <a href="https://github.com/darkangle4022211-cpu" target="_blank" rel="noopener noreferrer">github.com/darkangle4022211-cpu</a>
+      </div>
+    </div>
+    <div id="copy-status" class="sr-only" aria-live="polite"></div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
